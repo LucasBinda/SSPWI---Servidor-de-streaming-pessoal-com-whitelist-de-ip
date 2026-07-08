@@ -1,0 +1,30 @@
+# Exemplo de reverse proxy com whitelist de IP também na camada de rede.
+# Copie para /etc/nginx/sites-available/streaming e ajuste os IPs e o domínio.
+#
+# Vantagem de fazer isso aqui alem do middleware do Node: o nginx recusa a
+# conexao antes mesmo dela chegar na aplicacao (defesa em profundidade).
+
+server {
+    listen 80;
+    server_name SEU_DOMINIO_OU_IP;
+
+    # Libere apenas os IPs conhecidos (mesmos do config/whitelist.json)
+    allow 192.168.0.10;
+    allow 127.0.0.1;
+    deny all;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+        # Necessario para o video aceitar "pular" para qualquer ponto (seek)
+        proxy_set_header Range $http_range;
+        proxy_set_header If-Range $http_if_range;
+        proxy_buffering off;
+    }
+}
+
+# Para HTTPS, o jeito mais simples e usar o Certbot (Let's Encrypt) por cima
+# desse mesmo bloco: `certbot --nginx -d SEU_DOMINIO`

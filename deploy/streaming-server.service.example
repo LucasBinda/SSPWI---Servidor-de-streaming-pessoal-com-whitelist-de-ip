@@ -1,0 +1,20 @@
+# Exemplo de unidade systemd para o servidor iniciar com o sistema
+# e reiniciar sozinho se cair. Copie para /etc/systemd/system/streaming-server.service
+# (ajustando os caminhos e o usuario) e rode:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now streaming-server
+
+[Unit]
+Description=Servidor de streaming pessoal
+After=network.target
+
+[Service]
+Type=simple
+User=SEU_USUARIO
+WorkingDirectory=/caminho/para/streaming-server
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+Environment=PORT=3000
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,30 @@
+# Dependências
+node_modules/
+
+# Variáveis de ambiente / segredos
+.env
+.env.*
+
+# Mídia — filmes e capas não devem ir pro Git (arquivos grandes,
+# geralmente protegidos por direitos autorais, e pessoais)
+media/movies/*
+!media/movies/.gitkeep
+media/covers/*
+!media/covers/.gitkeep
+
+# Whitelist de IP — evita vazar os IPs autorizados publicamente no repositório.
+# Se preferir versionar um exemplo, use um "whitelist.example.json" à parte.
+config/whitelist.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/
+*.swp
