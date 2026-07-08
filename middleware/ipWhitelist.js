@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { ipEstaAutorizado } = require('./ipMatch');
 
 const WHITELIST_PATH = path.join(__dirname, '..', 'config', 'whitelist.json');
 
@@ -30,7 +31,7 @@ function ipWhitelistMiddleware(req, res, next) {
 
   const clientIp = getClientIp(req);
 
-  if (allowedIps.includes(clientIp)) {
+  if (ipEstaAutorizado(clientIp, allowedIps)) {
     return next();
   }
 

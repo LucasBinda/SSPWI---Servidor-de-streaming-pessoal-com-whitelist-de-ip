@@ -79,6 +79,28 @@ cp config/whitelist.example.json config/whitelist.json
 seus IPs autorizados caso você suba este projeto pro GitHub — só o
 `.example.json` é versionado.
 
+### IPv6
+
+O servidor já escuta em IPv4 e IPv6 ao mesmo tempo, sem precisar configurar
+nada — é o padrão do Node.js. A whitelist aceita tanto um IP exato quanto uma
+faixa em notação CIDR (`192.168.0.0/24` ou `2804:14d::/48`). Faixas são úteis
+principalmente para IPv6: muitos sistemas operacionais trocam periodicamente
+o endereço IPv6 do próprio dispositivo (privacy extensions), então liberar o
+endereço exato pode parar de funcionar depois de um tempo. Liberar o prefixo
+que sua operadora atribui (geralmente estável) é mais confiável.
+
+### Porta para acesso de outra rede
+
+Por padrão o servidor escuta na porta `3000` (ajustável com a variável de
+ambiente `PORT`). Para alguém de fora da sua rede local acessar:
+
+- **Sem o nginx do `deploy/`**: encaminhe a porta `3000` no seu roteador
+  (*port forwarding*) para o IP interno da máquina que roda o servidor.
+- **Com o nginx do `deploy/`** (recomendado): encaminhe a porta `80` (ou
+  `443` com HTTPS) para a máquina do nginx, e mantenha a `3000` acessível só
+  via `localhost` — assim quem está de fora nunca fala direto com o Node, só
+  com a camada que já filtra por IP antes.
+
 O arquivo é lido a cada requisição — não precisa reiniciar o servidor depois
 de editar. Descubra o IP público de quem vai assistir em
 https://whatismyipaddress.com (se for um IP dinâmico, veja a seção abaixo).
