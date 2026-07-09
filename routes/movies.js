@@ -47,20 +47,50 @@ function scanMoviesDir(dir, baseDir = dir) {
   return results;
 }
 
-// data/catalog.json é opcional: serve só para sobrescrever título, descrição
-// ou capa de um arquivo específico.
-function loadOverrides() {
+// data/catalog.json serve para sobrescrever título, descrição ou capa de
+// um arquivo específico. Esta função compara o que já está escaneado em
+// media/movies/ com o que já existe no arquivo: qualquer filme encontrado
+// que ainda não tenha uma entrada lá ganha um "rascunho" automático
+// (título gerado a partir do nome do arquivo, descrição e capa vazias),
+// que é gravado de volta no arquivo — assim você só precisa completar os
+// campos vazios, sem precisar criar a entrada na mão.
+function sincronizarCatalogo(arquivosEncontrados) {
+  let listaAtual = [];
   try {
     const raw = fs.readFileSync(CATALOG_PATH, 'utf-8');
-    const lista = JSON.parse(raw);
-    const map = {};
-    lista.forEach((item) => {
-      if (item.arquivo) map[item.arquivo] = item;
-    });
-    return map;
+    listaAtual = JSON.parse(raw);
+    if (!Array.isArray(listaAtual)) listaAtual = [];
   } catch (err) {
-    return {};
+    listaAtual = [];
   }
+
+  const jaExistem = new Set(listaAtual.map((item) => item.arquivo));
+  const faltando = arquivosEncontrados.filter((relPath) => !jaExistem.has(relPath));
+
+  if (faltando.length === 0) {
+    return listaAtual;
+  }
+
+  const novasEntradas = faltando.map((relPath) => ({
+    arquivo: relPath,
+    titulo: tituloAPartirDoNome(relPath),
+    descricao: '',
+    capa: '',
+  }));
+
+  const listaAtualizada = [...listaAtual, ...novasEntradas];
+
+  try {
+    fs.writeFileSync(CATALOG_PATH, JSON.stringify(listaAtualizada, null, 2) + '\n', 'utf-8');
+    console.log(
+      `[catálogo] ${faltando.length} filme(s) novo(s) adicionado(s) em data/catalog.json ` +
+      `(preencha descrição/capa quando quiser): ${faltando.join(', ')}`
+    );
+  } catch (err) {
+    console.error('Falha ao atualizar data/catalog.json:', err.message);
+  }
+
+  return listaAtualizada;
 }
 
 function tituloAPartirDoNome(relPath) {
@@ -76,7 +106,12 @@ function tituloAPartirDoNome(relPath) {
 function handleMoviesApi(req, res) {
   try {
     const arquivos = scanMoviesDir(MOVIES_DIR);
-    const overrides = loadOverrides();
+    const listaSincronizada = sincronizarCatalogo(arquivos);
+
+    const overrides = {};
+    listaSincronizada.forEach((item) => {
+      if (item.arquivo) overrides[item.arquivo] = item;
+    });
 
     const catalogo = arquivos.map((relPath) => {
       const override = overrides[relPath] || {};

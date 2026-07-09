@@ -45,21 +45,29 @@ ffmpeg -i entrada.mkv -c:v libx264 -c:a aac saida.mp4
 
 ### Customizando título, descrição ou capa (opcional)
 
-Por padrão o título vem do nome do arquivo. Para customizar algum filme
-específico, edite `data/catalog.json` — ele funciona como uma sobreposição,
-identificada pelo caminho relativo do arquivo (`arquivo`), e é totalmente
-opcional (pode até apagar o arquivo, ou deixar `[]`):
+Por padrão o título vem do nome do arquivo, e o servidor **detecta e
+preenche sozinho** o `data/catalog.json` sempre que encontra um filme em
+`media/movies/` que ainda não tem uma entrada lá — sem sobrescrever nenhuma
+entrada já preenchida por você. Assim, você não precisa criar a entrada na
+mão: adicione o filme na pasta, acesse o catálogo pelo navegador uma vez, e
+uma entrada "rascunho" já aparece em `data/catalog.json`, pronta para você
+completar `descricao` e `capa`:
 
 ```json
 [
   {
     "arquivo": "acao/filme-de-acao.mkv",
-    "titulo": "Título customizado",
-    "descricao": "Descrição breve.",
-    "capa": "/covers/filme-de-acao.jpg"
+    "titulo": "filme de acao",
+    "descricao": "",
+    "capa": ""
   }
 ]
 ```
+
+Se quiser, edite esses campos manualmente depois — na próxima vez que o
+catálogo for carregado, essa entrada não é mais tocada (só campos vazios
+"puxam" o padrão automático em tela; o arquivo em si só recebe entradas
+novas, nunca sobrescreve as que você já editou).
 
 Capas (opcional) vão em `media/covers/` e são referenciadas como
 `/covers/nome-do-arquivo.jpg`.
