@@ -4,5 +4,11 @@
     "titulo": "Título customizado do filme 1",
     "descricao": "Descrição breve do filme.",
     "capa": "/covers/filme-1.jpg"
+  },
+  {
+    "arquivo": "filme-solto.mkv",
+    "titulo": "",
+    "descricao": "",
+    "capa": ""
   }
 ]

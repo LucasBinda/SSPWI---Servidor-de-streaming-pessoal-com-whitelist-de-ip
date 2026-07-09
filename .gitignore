@@ -12,6 +12,10 @@ media/movies/*
 media/covers/*
 !media/covers/.gitkeep
 
+# Catálogo real — é gerado/atualizado automaticamente pelo servidor e reflete
+# sua coleção pessoal de filmes. Só o .example.json é versionado.
+data/catalog.json
+
 # Whitelist de IP — evita vazar os IPs autorizados publicamente no repositório.
 # Se preferir versionar um exemplo, use um "whitelist.example.json" à parte.
 config/whitelist.json
@@ -19,9 +23,6 @@ config/whitelist.json
 # Logs
 *.log
 npm-debug.log*
-
-# Arquivo desnecessario
-package-lock.json
 
 # Sistema operacional
 .DS_Store

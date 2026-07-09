@@ -45,21 +45,24 @@ ffmpeg -i entrada.mkv -c:v libx264 -c:a aac saida.mp4
 
 ### Customizando título, descrição ou capa (opcional)
 
-Por padrão o título vem do nome do arquivo, e o servidor **detecta e
-preenche sozinho** o `data/catalog.json` sempre que encontra um filme em
-`media/movies/` que ainda não tem uma entrada lá — sem sobrescrever nenhuma
-entrada já preenchida por você. Assim, você não precisa criar a entrada na
-mão: adicione o filme na pasta, acesse o catálogo pelo navegador uma vez, e
-uma entrada "rascunho" já aparece em `data/catalog.json`, pronta para você
-completar `descricao` e `capa`:
+Você **não precisa criar `data/catalog.json` manualmente** — ele não existe
+até você rodar o servidor com pelo menos um filme na pasta, e a partir daí é
+mantido automaticamente (veja a seção seguinte). Ele fica de fora do Git
+(está no `.gitignore`, junto com a whitelist), porque reflete a sua coleção
+pessoal — títulos, descrições e nomes de arquivo específicos do seu acervo.
+
+Para saber o formato, veja `data/catalog.example.json` (esse sim é
+versionado no Git, só como referência). Para customizar um filme
+específico depois que ele já foi detectado, edite a entrada correspondente
+em `data/catalog.json` pelo caminho relativo do arquivo (`arquivo`):
 
 ```json
 [
   {
     "arquivo": "acao/filme-de-acao.mkv",
-    "titulo": "filme de acao",
-    "descricao": "",
-    "capa": ""
+    "titulo": "Título customizado",
+    "descricao": "Descrição breve.",
+    "capa": "/covers/filme-de-acao.jpg"
   }
 ]
 ```
@@ -179,7 +182,7 @@ streaming-server/
 │   ├── whitelist.example.json      # exemplo versionado no Git
 │   └── settings.json                # opções gerais (ex: remoção automática do catálogo)
 ├── data/
-│   └── catalog.json               # overrides opcionais de título/descrição/capa
+│   └── catalog.example.json         # exemplo do formato (catalog.json real é gerado, fora do Git)
 ├── media/
 │   ├── movies/                     # arquivos de vídeo (fora do Git)
 │   └── covers/                      # capas dos filmes (fora do Git)
