@@ -20,6 +20,9 @@ config/whitelist.json
 *.log
 npm-debug.log*
 
+# Arquivo desnecessario
+package-lock.json
+
 # Sistema operacional
 .DS_Store
 Thumbs.db
