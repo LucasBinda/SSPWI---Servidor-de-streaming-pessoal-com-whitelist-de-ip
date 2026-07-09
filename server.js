@@ -1,5 +1,4 @@
 const http = require('http');
-const url = require('url');
 const path = require('path');
 
 const checarWhitelist = require('./middleware/ipWhitelist');
@@ -22,17 +21,33 @@ const server = http.createServer((req, res) => {
     return res.end('Método não suportado.');
   }
 
-  const parsedUrl = url.parse(req.url, true);
-  const pathname = decodeURIComponent(parsedUrl.pathname);
+  // API WHATWG URL (new URL / URLSearchParams) no lugar do antigo
+  // url.parse(): o próprio Node.js avisa (DEP0169) que url.parse() tem
+  // comportamento inconsistente com implicações de segurança e não recebe
+  // mais correção nem pra CVEs novos. URL é global — não precisa de require.
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  } catch (err) {
+    res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('URL inválida.');
+  }
+
+  // pathname fica sem decodificar aqui de propósito: quem decodifica (uma
+  // única vez) é o serveStatic, na hora de resolver o arquivo real — assim
+  // evita decodificar duas vezes o mesmo caminho.
+  const pathname = parsedUrl.pathname;
 
   // API do catálogo
   if (pathname === '/api/movies') {
     return handleMoviesApi(req, res);
   }
 
-  // Streaming de vídeo (com suporte a range requests)
+  // Streaming de vídeo (com suporte a range requests). searchParams já vem
+  // decodificado pela própria API URL — sem decode manual aqui também.
   if (pathname === '/stream') {
-    return handleStream(req, res, parsedUrl.query);
+    const query = Object.fromEntries(parsedUrl.searchParams);
+    return handleStream(req, res, query);
   }
 
   // Capas dos filmes
