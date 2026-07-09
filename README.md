@@ -72,6 +72,24 @@ novas, nunca sobrescreve as que você já editou).
 Capas (opcional) vão em `media/covers/` e são referenciadas como
 `/covers/nome-do-arquivo.jpg`.
 
+### Remoção automática de filmes apagados
+
+Além de adicionar filmes novos, o servidor também **remove** do
+`data/catalog.json` qualquer entrada cujo arquivo não existe mais em
+`media/movies/` (por exemplo, se você apagou ou moveu o arquivo). Essa
+opção vem **ativada por padrão**, mas pode ser desligada em
+`config/settings.json`:
+
+```json
+{ "removerFilmesAusentesDoCatalogo": false }
+```
+
+Com `false`, entradas de filmes ausentes ficam guardadas no arquivo mesmo
+que o vídeo não esteja mais na pasta (útil se você move arquivos grandes
+para um HD externo temporariamente e não quer perder a descrição/capa que
+já preencheu). Assim como a whitelist, esse arquivo é lido a cada
+requisição — não precisa reiniciar o servidor depois de editar.
+
 ## Configurando a whitelist de IP
 
 Copie o exemplo e edite com os IPs que podem acessar o servidor:
@@ -157,8 +175,9 @@ streaming-server/
 ├── lib/
 │   └── staticServer.js          # serve o frontend e as capas (substitui express.static)
 ├── config/
-│   ├── whitelist.json            # IPs autorizados (fora do Git)
-│   └── whitelist.example.json     # exemplo versionado no Git
+│   ├── whitelist.json             # IPs autorizados (fora do Git)
+│   ├── whitelist.example.json      # exemplo versionado no Git
+│   └── settings.json                # opções gerais (ex: remoção automática do catálogo)
 ├── data/
 │   └── catalog.json               # overrides opcionais de título/descrição/capa
 ├── media/

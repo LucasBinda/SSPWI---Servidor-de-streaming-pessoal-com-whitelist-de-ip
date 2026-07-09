@@ -3,6 +3,7 @@ const path = require('path');
 
 const CATALOG_PATH = path.join(__dirname, '..', 'data', 'catalog.json');
 const MOVIES_DIR = path.join(__dirname, '..', 'media', 'movies');
+const SETTINGS_PATH = path.join(__dirname, '..', 'config', 'settings.json');
 
 // Extensões de vídeo reconhecidas ao escanear a pasta media/movies.
 // MKV funciona no servidor, mas nem todo navegador reproduz o container
@@ -47,14 +48,37 @@ function scanMoviesDir(dir, baseDir = dir) {
   return results;
 }
 
+// Lê config/settings.json a cada chamada (mesmo padrão da whitelist.json:
+// dá pra editar e aplicar na hora, sem reiniciar o servidor). Se o arquivo
+// não existir ou vier incompleto, usa os valores padrão abaixo.
+function loadSettings() {
+  const padrao = { removerFilmesAusentesDoCatalogo: true };
+  try {
+    const raw = fs.readFileSync(SETTINGS_PATH, 'utf-8');
+    const config = JSON.parse(raw);
+    return { ...padrao, ...config };
+  } catch (err) {
+    return padrao;
+  }
+}
+
 // data/catalog.json serve para sobrescrever título, descrição ou capa de
 // um arquivo específico. Esta função compara o que já está escaneado em
-// media/movies/ com o que já existe no arquivo: qualquer filme encontrado
-// que ainda não tenha uma entrada lá ganha um "rascunho" automático
-// (título gerado a partir do nome do arquivo, descrição e capa vazias),
-// que é gravado de volta no arquivo — assim você só precisa completar os
-// campos vazios, sem precisar criar a entrada na mão.
+// media/movies/ com o que já existe no arquivo:
+//
+// - qualquer filme encontrado que ainda não tenha uma entrada lá ganha um
+//   "rascunho" automático (título gerado a partir do nome do arquivo,
+//   descrição e capa vazias);
+// - qualquer entrada cujo arquivo não existe mais em media/movies/ é
+//   removida, DESDE QUE `removerFilmesAusentesDoCatalogo` esteja true em
+//   config/settings.json (ativado por padrão — o host pode desativar se
+//   preferir manter entradas de filmes removidos temporariamente).
+//
+// O resultado é gravado de volta em data/catalog.json quando há qualquer
+// mudança (adição ou remoção).
 function sincronizarCatalogo(arquivosEncontrados) {
+  const settings = loadSettings();
+
   let listaAtual = [];
   try {
     const raw = fs.readFileSync(CATALOG_PATH, 'utf-8');
@@ -64,10 +88,20 @@ function sincronizarCatalogo(arquivosEncontrados) {
     listaAtual = [];
   }
 
+  const encontradosSet = new Set(arquivosEncontrados);
   const jaExistem = new Set(listaAtual.map((item) => item.arquivo));
+
   const faltando = arquivosEncontrados.filter((relPath) => !jaExistem.has(relPath));
 
-  if (faltando.length === 0) {
+  let listaBase = listaAtual;
+  let removidos = [];
+
+  if (settings.removerFilmesAusentesDoCatalogo) {
+    removidos = listaAtual.filter((item) => item.arquivo && !encontradosSet.has(item.arquivo));
+    listaBase = listaAtual.filter((item) => !item.arquivo || encontradosSet.has(item.arquivo));
+  }
+
+  if (faltando.length === 0 && removidos.length === 0) {
     return listaAtual;
   }
 
@@ -78,14 +112,23 @@ function sincronizarCatalogo(arquivosEncontrados) {
     capa: '',
   }));
 
-  const listaAtualizada = [...listaAtual, ...novasEntradas];
+  const listaAtualizada = [...listaBase, ...novasEntradas];
 
   try {
     fs.writeFileSync(CATALOG_PATH, JSON.stringify(listaAtualizada, null, 2) + '\n', 'utf-8');
-    console.log(
-      `[catálogo] ${faltando.length} filme(s) novo(s) adicionado(s) em data/catalog.json ` +
-      `(preencha descrição/capa quando quiser): ${faltando.join(', ')}`
-    );
+
+    if (faltando.length > 0) {
+      console.log(
+        `[catálogo] ${faltando.length} filme(s) novo(s) adicionado(s) em data/catalog.json ` +
+        `(preencha descrição/capa quando quiser): ${faltando.join(', ')}`
+      );
+    }
+    if (removidos.length > 0) {
+      console.log(
+        `[catálogo] ${removidos.length} entrada(s) removida(s) de data/catalog.json ` +
+        `(arquivo não existe mais em media/movies/): ${removidos.map((r) => r.arquivo).join(', ')}`
+      );
+    }
   } catch (err) {
     console.error('Falha ao atualizar data/catalog.json:', err.message);
   }
