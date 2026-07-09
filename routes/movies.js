@@ -1,8 +1,5 @@
-const express = require('express');
 const fs = require('fs');
 const path = require('path');
-
-const router = express.Router();
 
 const CATALOG_PATH = path.join(__dirname, '..', 'data', 'catalog.json');
 const MOVIES_DIR = path.join(__dirname, '..', 'media', 'movies');
@@ -51,8 +48,7 @@ function scanMoviesDir(dir, baseDir = dir) {
 }
 
 // data/catalog.json é opcional: serve só para sobrescrever título, descrição
-// ou capa de um arquivo específico. Se o arquivo não existir (ou não tiver
-// uma entrada para um filme), o título é gerado a partir do nome do arquivo.
+// ou capa de um arquivo específico.
 function loadOverrides() {
   try {
     const raw = fs.readFileSync(CATALOG_PATH, 'utf-8');
@@ -77,7 +73,7 @@ function tituloAPartirDoNome(relPath) {
 
 // GET /api/movies -> monta o catálogo escaneando media/movies/ (incluindo
 // subpastas) e aplicando eventuais overrides de data/catalog.json
-router.get('/api/movies', (req, res) => {
+function handleMoviesApi(req, res) {
   try {
     const arquivos = scanMoviesDir(MOVIES_DIR);
     const overrides = loadOverrides();
@@ -94,33 +90,39 @@ router.get('/api/movies', (req, res) => {
     });
 
     catalogo.sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR'));
-    res.json(catalogo);
+
+    const body = JSON.stringify(catalogo);
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(body);
   } catch (err) {
     console.error('Falha ao montar o catálogo:', err.message);
-    res.status(500).json({ erro: 'Não foi possível carregar o catálogo.' });
+    res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ erro: 'Não foi possível carregar o catálogo.' }));
   }
-});
+}
 
 // GET /stream?arquivo=<caminho relativo dentro de media/movies>
-// Usa query string (em vez de segmento de rota) para poder aceitar
-// caminhos com subpastas, ex: arquivo=acao%2Ffilme.mp4
-router.get('/stream', (req, res) => {
-  const relPath = req.query.arquivo;
+// query já vem interpretado (objeto) de quem chamou esta função.
+function handleStream(req, res, query) {
+  const relPath = query.arquivo;
   if (!relPath) {
-    return res.status(400).send('Parâmetro "arquivo" ausente.');
+    res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('Parâmetro "arquivo" ausente.');
   }
 
   // Resolve o caminho final e garante que ele continua DENTRO de
-  // MOVIES_DIR — é isso que impede "../../etc/passwd" e afins, mesmo
-  // com subpastas permitidas.
+  // MOVIES_DIR — impede "../../etc/passwd" e afins, mesmo com subpastas
+  // permitidas.
   const filePath = path.normalize(path.join(MOVIES_DIR, relPath));
-  const movimentsDirComBarra = MOVIES_DIR + path.sep;
-  if (!filePath.startsWith(movimentsDirComBarra)) {
-    return res.status(400).send('Caminho inválido.');
+  const moviesDirComBarra = MOVIES_DIR + path.sep;
+  if (!filePath.startsWith(moviesDirComBarra)) {
+    res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('Caminho inválido.');
   }
 
   if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
-    return res.status(404).send('Arquivo não encontrado.');
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('Arquivo não encontrado.');
   }
 
   const stat = fs.statSync(filePath);
@@ -157,6 +159,6 @@ router.get('/stream', (req, res) => {
     });
     fs.createReadStream(filePath).pipe(res);
   }
-});
+}
 
-module.exports = router;
+module.exports = { handleMoviesApi, handleStream };

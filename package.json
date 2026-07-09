@@ -1,13 +1,11 @@
 {
   "name": "streaming-server",
-  "version": "1.0.0",
-  "description": "Servidor pessoal de streaming de filmes com whitelist de IP",
+  "version": "2.0.0",
+  "description": "Servidor pessoal de streaming de filmes com whitelist de IP, sem dependências de terceiros (só módulos nativos do Node.js)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "license": "MIT",
-  "dependencies": {
-    "express": "^4.19.2"
-  }
+  "dependencies": {}
 }

@@ -1,4 +1,4 @@
-# Dependências
+# Dependências (mantido por precaução, caso algum pacote seja adicionado no futuro)
 node_modules/
 
 # Variáveis de ambiente / segredos

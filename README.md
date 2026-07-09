@@ -7,13 +7,14 @@ por IP.
 
 ## Requisitos
 
-- Node.js 18 ou superior
+- Node.js 18 ou superior (só isso — sem dependências de terceiros)
 
 ## Instalação
 
-```bash
-npm install
-```
+Não há nada para instalar. Esta versão usa só módulos nativos do Node.js
+(`http`, `fs`, `path`, `url`) — não existe `node_modules/` nem pacotes
+baixados do npm. Basta ter o Node.js instalado e rodar direto (veja
+"Rodando" mais abaixo).
 
 ## Adicionando filmes
 
@@ -139,18 +140,27 @@ rede local), vale reforçar:
 
 ```
 streaming-server/
-├── server.js              # ponto de entrada
+├── server.js                 # ponto de entrada — roteamento manual (http nativo)
 ├── middleware/
-│   └── ipWhitelist.js      # filtro de IP (camada de acesso)
+│   ├── ipWhitelist.js          # filtro de IP (camada de acesso)
+│   └── ipMatch.js               # comparação de IP exato ou faixa CIDR
 ├── routes/
-│   └── movies.js           # API do catálogo + streaming com range requests
+│   └── movies.js                # catálogo automático + streaming com range requests
+├── lib/
+│   └── staticServer.js          # serve o frontend e as capas (substitui express.static)
 ├── config/
-│   └── whitelist.json      # IPs autorizados
+│   ├── whitelist.json            # IPs autorizados (fora do Git)
+│   └── whitelist.example.json     # exemplo versionado no Git
 ├── data/
-│   └── catalog.json        # lista de filmes
+│   └── catalog.json               # overrides opcionais de título/descrição/capa
 ├── media/
-│   ├── movies/              # arquivos de vídeo
-│   └── covers/               # capas dos filmes
-├── public/                  # frontend (catálogo + player)
-└── deploy/                  # exemplos de nginx e systemd (opcionais)
+│   ├── movies/                     # arquivos de vídeo (fora do Git)
+│   └── covers/                      # capas dos filmes (fora do Git)
+├── public/                          # frontend (catálogo + player)
+└── deploy/                          # exemplos de nginx e systemd (opcionais)
 ```
+
+Este projeto não depende de nenhum pacote de terceiros — só do próprio
+Node.js. Veja `docs/implementacao-sem-dependencias.md` para o
+detalhamento de como o roteamento manual substitui o que o `express`
+fazia.

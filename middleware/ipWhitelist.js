@@ -20,23 +20,30 @@ function getClientIp(req) {
   return (rawIp || '').replace('::ffff:', '');
 }
 
-function ipWhitelistMiddleware(req, res, next) {
+// Retorna true se a requisição pode seguir em frente. Se retornar false,
+// já escreveu a resposta 403 (ou 500) sozinha — quem chamou só precisa
+// parar de processar a requisição nesse ponto.
+function checarWhitelist(req, res) {
   let allowedIps;
   try {
     allowedIps = loadAllowedIps();
   } catch (err) {
     console.error('Falha ao ler config/whitelist.json:', err.message);
-    return res.status(500).send('Erro de configuração do servidor.');
+    res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Erro de configuração do servidor.');
+    return false;
   }
 
   const clientIp = getClientIp(req);
 
   if (ipEstaAutorizado(clientIp, allowedIps)) {
-    return next();
+    return true;
   }
 
-  console.warn(`[ACESSO BLOQUEADO] IP não autorizado: ${clientIp} -> ${req.method} ${req.originalUrl}`);
-  res.status(403).send('Acesso negado. Seu IP não está autorizado a acessar este serviço.');
+  console.warn(`[ACESSO BLOQUEADO] IP não autorizado: ${clientIp} -> ${req.method} ${req.url}`);
+  res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+  res.end('Acesso negado. Seu IP não está autorizado a acessar este serviço.');
+  return false;
 }
 
-module.exports = ipWhitelistMiddleware;
+module.exports = checarWhitelist;
