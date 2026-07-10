@@ -1,9 +1,9 @@
 const fs = require('fs');
 const path = require('path');
+const { loadSettings } = require('../lib/settings');
 
 const CATALOG_PATH = path.join(__dirname, '..', 'data', 'catalog.json');
 const MOVIES_DIR = path.join(__dirname, '..', 'media', 'movies');
-const SETTINGS_PATH = path.join(__dirname, '..', 'config', 'settings.json');
 
 // Extensões de vídeo reconhecidas ao escanear a pasta media/movies.
 // MKV funciona no servidor, mas nem todo navegador reproduz o container
@@ -46,20 +46,6 @@ function scanMoviesDir(dir, baseDir = dir) {
     }
   }
   return results;
-}
-
-// Lê config/settings.json a cada chamada (mesmo padrão da whitelist.json:
-// dá pra editar e aplicar na hora, sem reiniciar o servidor). Se o arquivo
-// não existir ou vier incompleto, usa os valores padrão abaixo.
-function loadSettings() {
-  const padrao = { removerFilmesAusentesDoCatalogo: true };
-  try {
-    const raw = fs.readFileSync(SETTINGS_PATH, 'utf-8');
-    const config = JSON.parse(raw);
-    return { ...padrao, ...config };
-  } catch (err) {
-    return padrao;
-  }
 }
 
 // data/catalog.json serve para sobrescrever título, descrição ou capa de

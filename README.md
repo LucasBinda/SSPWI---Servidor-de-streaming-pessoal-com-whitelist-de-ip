@@ -93,6 +93,25 @@ para um HD externo temporariamente e não quer perder a descrição/capa que
 já preencheu). Assim como a whitelist, esse arquivo é lido a cada
 requisição — não precisa reiniciar o servidor depois de editar.
 
+### Proxies confiáveis (importante para a segurança da whitelist)
+
+`config/settings.json` também tem `proxiesConfiaveis` (padrão:
+`["127.0.0.1", "::1"]`). Esse campo controla em quais casos o servidor
+confia no cabeçalho `X-Forwarded-For` para descobrir o IP real do
+cliente — algo necessário quando você usa o nginx do `deploy/` na frente
+(ele repassa o IP original nesse cabeçalho), mas que **precisa ser
+restrito**, porque `X-Forwarded-For` é definido pelo próprio cliente HTTP
+e pode ser forjado por qualquer um.
+
+A regra: só confiamos nesse cabeçalho quando a conexão TCP direta (que não
+pode ser forjada) já vem de um IP desta lista. Se você expõe a porta `3000`
+diretamente (sem nginx), **deixe a lista vazia** (`"proxiesConfiaveis": []`)
+para que o cabeçalho seja completamente ignorado e só o IP real da conexão
+importe. Se você usa o nginx do `deploy/` rodando na mesma máquina, o
+padrão (`127.0.0.1`) já é o valor certo. Veja
+`docs/testes-de-seguranca.md`, item 1, para reproduzir e confirmar esse
+comportamento você mesmo.
+
 ## Configurando a whitelist de IP
 
 Copie o exemplo e edite com os IPs que podem acessar o servidor:
@@ -176,21 +195,24 @@ streaming-server/
 ├── routes/
 │   └── movies.js                # catálogo automático + streaming com range requests
 ├── lib/
-│   └── staticServer.js          # serve o frontend e as capas (substitui express.static)
+│   ├── staticServer.js          # serve o frontend e as capas (substitui express.static)
+│   └── settings.js               # leitura centralizada de config/settings.json
 ├── config/
 │   ├── whitelist.json             # IPs autorizados (fora do Git)
 │   ├── whitelist.example.json      # exemplo versionado no Git
-│   └── settings.json                # opções gerais (ex: remoção automática do catálogo)
+│   └── settings.json                # opções gerais (proxies confiáveis, remoção automática etc.)
 ├── data/
 │   └── catalog.example.json         # exemplo do formato (catalog.json real é gerado, fora do Git)
 ├── media/
 │   ├── movies/                     # arquivos de vídeo (fora do Git)
 │   └── covers/                      # capas dos filmes (fora do Git)
 ├── public/                          # frontend (catálogo + player)
-└── deploy/                          # exemplos de nginx e systemd (opcionais)
+├── deploy/                          # exemplos de nginx e systemd (opcionais)
+└── docs/                            # documentação técnica e testes de segurança
 ```
 
 Este projeto não depende de nenhum pacote de terceiros — só do próprio
 Node.js. Veja `docs/implementacao-sem-dependencias.md` para o
 detalhamento de como o roteamento manual substitui o que o `express`
-fazia.
+fazia, e `docs/testes-de-seguranca.md` para reproduzir cada vulnerabilidade
+já corrigida e confirmar você mesmo que a correção funciona.
