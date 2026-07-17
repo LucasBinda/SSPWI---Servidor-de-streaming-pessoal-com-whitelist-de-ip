@@ -20,12 +20,16 @@ data/catalog.json
 # reflete o acervo local.
 data/reencode-state.json
 
+# Segredo HMAC das sessões — gerado no primeiro boot; vazar isso
+# permitiria forjar cookies de sessão.
+data/session-secret
+
 # Whitelist de IP — evita vazar os IPs autorizados publicamente no repositório.
 # Se preferir versionar um exemplo, use um "whitelist.example.json" à parte.
 config/whitelist.json
 
-# Cache de HLS — segmentos .ts e manifestos temporários gerados sob demanda
-# pelo ffmpeg (lib/hlsSessionManager.js). Recriado a cada sessão de playback.
+# Caches gerados em runtime: legendas extraídas (cache/subs/) e temporários
+# do worker de conversão pra mp4 (cache/reencode/).
 cache/
 
 # Logs

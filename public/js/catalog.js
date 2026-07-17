@@ -1,8 +1,26 @@
+
+function mostrarBloqueado(container) {
+  container.innerHTML = `
+    <div class="empty-state">
+      Acesso negado pelo servidor.<br>
+      &hellip;
+    </div>`;
+  Auth.iniciarPolling(() => window.location.reload());
+}
+
 async function carregarCatalogo() {
   const container = document.getElementById('catalogo');
 
+  // Fase 3: garante a sessão (token+cookie) antes de pedir o catálogo —
+  // /api/movies e /covers/ exigem cookie válido. Se o servidor barrar,
+  // entra no polling de 20s até o acesso voltar.
+  if (!(await Auth.garantir())) {
+    return mostrarBloqueado(container);
+  }
+
   try {
     const res = await fetch('/api/movies');
+    if (res.status === 401 || res.status === 403) return mostrarBloqueado(container);
     if (!res.ok) throw new Error('Falha ao buscar catálogo');
     const filmes = await res.json();
 

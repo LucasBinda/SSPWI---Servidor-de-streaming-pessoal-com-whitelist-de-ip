@@ -2,9 +2,11 @@ const http = require('http');
 const path = require('path');
 
 const checarWhitelist = require('./middleware/ipWhitelist');
-const { handleMoviesApi, handleStream, scanMoviesDir, MOVIES_DIR } = require('./routes/movies');
+const { handleAuthSession, checarSessao } = require('./middleware/sessionCookie');
+const { handleMoviesApi, handleStream, scanMoviesDir, sincronizarCatalogo, MOVIES_DIR } = require('./routes/movies');
 const { handleMediaTracks, handleMediaSubtitle } = require('./routes/media');
 const { prepararWorker, enfileirarNaoMp4 } = require('./lib/reencodeWorker');
+const { coverPicker } = require('./lib/coverPicker');
 const { serveStatic } = require('./lib/staticServer');
 
 const PORT = process.env.PORT || 3000;
@@ -38,6 +40,26 @@ const server = http.createServer((req, res) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
     return res.end('Método não suportado.');
+  }
+
+  // Fase 3: emissão/renovação do cookie de sessão. Única rota de conteúdo
+  // sem exigência de sessão prévia (é onde ela nasce) — mas a whitelist já
+  // passou lá em cima, então IP de fora nunca ganha token.
+  if (pathname === '/auth/session') {
+    return handleAuthSession(req, res);
+  }
+
+  // Rotas de CONTEÚDO exigem sessão válida além da whitelist (token+cookie
+  // vinculado ao IP, ver middleware/sessionCookie.js). O front-end estático
+  // (html/css/js) fica só atrás da whitelist — a página precisa carregar
+  // pra conseguir pedir a sessão em /auth/session.
+  const rotaProtegida =
+    pathname === '/api/movies' ||
+    pathname === '/stream' ||
+    pathname.startsWith('/media/') ||
+    pathname.startsWith('/covers/');
+  if (rotaProtegida && !checarSessao(req, res)) {
+    return;
   }
 
   // API do catálogo
@@ -85,5 +107,11 @@ server.listen(PORT, () => {
   // servidor estava desligado). Novos arquivos detectados em runtime são
   // enfileirados pelo /api/movies (routes/movies.js).
   prepararWorker();
-  enfileirarNaoMp4(scanMoviesDir(MOVIES_DIR));
+  const arquivos = scanMoviesDir(MOVIES_DIR);
+  enfileirarNaoMp4(arquivos);
+
+  // Fase 4: sincroniza o catálogo já no boot (sem esperar a primeira
+  // visita) e gera capa pra quem não tem — ou pra quem referencia uma capa
+  // local que não existe mais em disco.
+  coverPicker.garantirCapas(sincronizarCatalogo(arquivos));
 });

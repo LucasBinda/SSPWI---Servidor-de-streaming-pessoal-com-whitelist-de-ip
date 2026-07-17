@@ -10,7 +10,18 @@ document.title = titulo ? `${titulo} — Sala de projeção` : 'Assistindo — S
 if (!arquivo) {
   window.location.href = '/';
 } else {
-  iniciarPlayer(arquivo);
+  // Fase 3: o /stream e o /media/* exigem sessão válida (token+cookie) —
+  // garante antes de montar o player. Barrado -> mensagem + polling de 20s
+  // até o acesso voltar (aí recarrega e o player monta normalmente).
+  Auth.garantir().then((autorizado) => {
+    if (autorizado) {
+      iniciarPlayer(arquivo);
+    } else {
+      document.getElementById('descricao-filme').textContent =
+        'Acesso negado pelo servidor. Tentando reautorizar automaticamente a cada 20 segundos…';
+      Auth.iniciarPolling(() => window.location.reload());
+    }
+  });
 }
 
 // Reprodução direta via /stream (range requests) — o HLS on-the-fly foi

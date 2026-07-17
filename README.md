@@ -1,20 +1,42 @@
 # Servidor de streaming pessoal (whitelist de IP)
 
-Servidor Node.js/Express minimalista: mostra um catálogo de filmes e faz o
-streaming do vídeo escolhido via HTTP, liberado apenas para IPs autorizados.
-Não há banco de dados nem cadastro — o catálogo é um JSON e a autorização é
-por IP.
+Servidor Node.js minimalista (sem Express, sem nenhum pacote de terceiros):
+mostra um catálogo de filmes e faz o streaming do vídeo escolhido via HTTP,
+liberado apenas para IPs autorizados. Não há banco de dados nem cadastro —
+o catálogo é um JSON e a autorização é por IP + cookie de sessão assinado.
+
+Além do catálogo e do streaming, o servidor cuida sozinho de três coisas em
+segundo plano:
+
+- **Padronização do acervo**: vídeo adicionado em formato diferente de
+  `.mp4` (MKV, AVI...) é convertido automaticamente pra `.mp4` por um
+  worker de baixa prioridade, substituindo o original (veja
+  `docs/fase2-worker-reencode.md`).
+- **Capas automáticas**: filme sem capa ganha uma — um frame aleatório do
+  próprio vídeo, extraído entre 20% e 80% da duração.
+- **Sessão auto-renovável**: além da whitelist de IP, as rotas de conteúdo
+  exigem um cookie de sessão assinado (HMAC) vinculado ao IP; o front-end
+  renova em background e, se for barrado, tenta reautorizar a cada 20
+  segundos (populando o log de segurança a cada tentativa).
+
+No player, o botão de engrenagem abre o painel de configurações: seletor de
+legenda (extraída na hora de dentro do arquivo, se houver), lista das
+faixas de áudio e um equalizador de 6 bandas com nivelamento automático de
+volume (Web Audio API, tudo no navegador).
 
 ## Requisitos
 
-- Node.js 18 ou superior (só isso — sem dependências de terceiros)
+- Node.js 18 ou superior (sem dependências de terceiros do npm)
+- `ffmpeg` e `ffprobe` no PATH — usados pra conversão automática pra
+  `.mp4`, extração de legendas embutidas e geração das capas. No Arch/
+  CachyOS: `pacman -S ffmpeg`; no Debian/Ubuntu: `apt install ffmpeg`.
 
 ## Instalação
 
-Não há nada para instalar. Esta versão usa só módulos nativos do Node.js
-(`http`, `fs`, `path`, `url`) — não existe `node_modules/` nem pacotes
-baixados do npm. Basta ter o Node.js instalado e rodar direto (veja
-"Rodando" mais abaixo).
+Não há nada do npm para instalar. Esta versão usa só módulos nativos do
+Node.js (`http`, `fs`, `path`, `crypto`, `child_process`) — não existe
+`node_modules/` nem pacotes baixados. Basta ter Node.js + ffmpeg instalados
+e rodar direto (veja "Rodando" mais abaixo).
 
 ## Adicionando filmes
 
@@ -32,16 +54,19 @@ media/movies/
     └── outro-filme.mp4
 ```
 
-Formatos aceitos: `.mp4`, `.mkv`, `.webm`, `.mov`, `.avi`, `.ogg`. **Na
-prática, `.mp4` com codec H.264 + AAC é o único que toca de forma confiável
-em qualquer navegador** — o servidor envia `.mkv` e os outros formatos
-corretamente, mas a reprodução depende do navegador do PC remoto (Safari não
-tem suporte a MKV; Chrome e Firefox dependem do codec interno do arquivo).
-Se um filme não tocar, converta com:
+Formatos aceitos: `.mp4`, `.mkv`, `.webm`, `.mov`, `.avi`, `.ogg` — mas
+você não precisa converter nada na mão: qualquer arquivo que não seja
+`.mp4` entra automaticamente na fila do **worker de padronização**, que o
+converte pra `.mp4` em background (com `nice -19`, sem disputar CPU com
+quem está assistindo) e substitui o original depois de verificar que a
+conversão deu certo. Fontes já em HEVC/AV1 são só remuxadas (segundos, sem
+perda); codecs antigos são re-encodados pra H.265 poupando espaço em disco.
+O progresso fica em `data/reencode-state.json` e no log do servidor;
+detalhes e configuração em `docs/fase2-worker-reencode.md`.
 
-```bash
-ffmpeg -i entrada.mkv -c:v libx264 -c:a aac saida.mp4
-```
+Enquanto a conversão não termina, o arquivo original ainda aparece no
+catálogo — se o navegador do PC remoto não tocar aquele formato, o player
+mostra um aviso e basta esperar a conversão concluir.
 
 ### Customizando título, descrição ou capa (opcional)
 
@@ -74,6 +99,27 @@ novas, nunca sobrescreve as que você já editou).
 
 Capas (opcional) vão em `media/covers/` e são referenciadas como
 `/covers/nome-do-arquivo.jpg`.
+
+### Capas automáticas
+
+Filme sem capa não fica sem capa: no boot do servidor e a cada carga do
+catálogo, um **aleatorizador de capas** (`lib/coverPicker.js`) extrai um
+frame do próprio vídeo — num ponto aleatório entre 20% e 80% da duração,
+longe de abertura e créditos — e grava em `media/covers/auto/`, atualizando
+o campo `capa` da entrada em `data/catalog.json`.
+
+Regras que ele segue:
+
+- **Nunca sobrescreve** uma capa que você definiu e que existe em disco —
+  só ocupa o campo quando está vazio.
+- **Capa referenciada que sumiu do disco é regerada** pelo mesmo processo
+  (vale pra qualquer capa local `/covers/...`; URLs externas ficam por sua
+  conta).
+- **Filme removido de `media/movies/` leva a capa automática junto** — nada
+  de jpg órfão acumulando.
+- Não gostou do frame sorteado? Apague o jpg em `media/covers/auto/` (um
+  novo ponto aleatório é sorteado) ou aponte o campo `capa` pra uma imagem
+  sua.
 
 ### Remoção automática de filmes apagados
 
@@ -111,6 +157,17 @@ importe. Se você usa o nginx do `deploy/` rodando na mesma máquina, o
 padrão (`127.0.0.1`) já é o valor certo. Veja
 `docs/testes-de-seguranca.md`, item 1, para reproduzir e confirmar esse
 comportamento você mesmo.
+
+### Opções do worker de conversão
+
+Também em `config/settings.json` (padrões entre parênteses):
+`reencodeAtivo` (`true`) liga/desliga o worker; `reencodeCodec`
+(`"libx265"`), `reencodePreset` (`"fast"`) e `reencodeCrf` (`26`) controlam
+o re-encode quando ele é necessário de verdade — fontes já em HEVC/AV1 são
+só remuxadas, sem re-encodar. Se algum aparelho da casa não decodificar
+HEVC (Chrome/Edge dependem de suporte por hardware; Firefox é limitado),
+troque `reencodeCodec` pra `"libx264"`. Tabela completa em
+`docs/fase2-worker-reencode.md`.
 
 ## Configurando a whitelist de IP
 
@@ -154,6 +211,40 @@ O arquivo é lido a cada requisição — não precisa reiniciar o servidor depo
 de editar. Descubra o IP público de quem vai assistir em
 https://whatismyipaddress.com (se for um IP dinâmico, veja a seção abaixo).
 
+## Login persistente (token + cookie) integrado à whitelist
+
+A whitelist manual decide **quem consegue fazer login**; a partir daí o
+cookie de sessão vira um **login persistente do usuário**, que sobrevive a
+troca de IP. Funciona assim, sem nenhuma ação sua:
+
+1. No primeiro acesso (que precisa vir de um IP da lista manual), a página
+   pede um token em `/auth/session`. O servidor emite um cookie `HttpOnly`
+   assinado com HMAC-SHA256 contendo um id de usuário — é esse id que vai
+   ancorar dados por usuário, como o tempo assistido de cada filme.
+2. **Renovação deslizante**: enquanto o site está em uso, o front-end
+   renova o cookie em background — cada renovação estica a validade em
+   **2 dias** (constante `DURACAO_SESSAO_DIAS` em `lib/sessionToken.js`),
+   com **teto absoluto de 7 dias** contados do primeiro login
+   (`VIDA_MAXIMA_DIAS`): depois disso o login renasce do zero, o que exige
+   estar de novo num IP da lista manual.
+3. **O IP acompanha o usuário**: se alguém com login válido aparecer num IP
+   fora da whitelist (trocou de rede, IPv6 rotativo), o IP novo é
+   matriculado automaticamente em `autoAllowedIps` no
+   `config/whitelist.json` — com validade colada na da sessão e registro de
+   qual usuário o autorizou. Entradas vencidas são podadas sozinhas; a sua
+   lista manual (`allowedIps`) nunca é tocada.
+4. Se o servidor barrar de vez (sem IP autorizado E sem cookie válido), o
+   front-end entra num **loop de reautorização a cada 20 segundos** — cada
+   tentativa gera `[ACESSO BLOQUEADO]`/`[SESSÃO NEGADA]` no log, de
+   propósito: é o rastro de auditoria. Quando o acesso volta, a página
+   recarrega sozinha.
+
+O segredo HMAC é gerado no primeiro boot e fica em `data/session-secret`
+(fora do Git). Consequência honesta do modelo: um cookie roubado dá acesso
+de qualquer IP **até expirar** — o teto de 7 dias e o `HttpOnly` limitam a
+janela; se suspeitar de vazamento, apague `data/session-secret` e reinicie
+(todas as sessões caem na hora).
+
 ## Rodando
 
 ```bash
@@ -180,9 +271,10 @@ rede local), vale reforçar:
   tráfego passar pela internet aberta, HTTPS evita que o link do vídeo (ou o
   próprio conteúdo) seja visível a qualquer um na mesma rede. O caminho mais
   simples é o Certbot por cima do nginx do exemplo em `deploy/`.
-- **Formato de vídeo**: arquivos `.mkv` ou com codecs incomuns podem não
-  tocar direto no navegador. Se isso acontecer, converta antes com
-  `ffmpeg -i entrada.mkv -c:v libx264 -c:a aac saida.mp4`.
+- **Formato de vídeo**: o worker de padronização já converte tudo pra
+  `.mp4` sozinho — se um filme recém-adicionado não tocar, é só esperar a
+  conversão em background terminar (acompanhe pelo log ou por
+  `data/reencode-state.json`).
 
 ## Estrutura do projeto
 
@@ -190,23 +282,32 @@ rede local), vale reforçar:
 streaming-server/
 ├── server.js                 # ponto de entrada — roteamento manual (http nativo)
 ├── middleware/
-│   ├── ipWhitelist.js          # filtro de IP (camada de acesso)
-│   └── ipMatch.js               # comparação de IP exato ou faixa CIDR
+│   ├── ipWhitelist.js          # filtro de IP (primeira camada de acesso)
+│   ├── sessionCookie.js         # sessão token+cookie (segunda camada, rotas de conteúdo)
+│   └── ipMatch.js                # comparação de IP exato ou faixa CIDR
 ├── routes/
-│   └── movies.js                # catálogo automático + streaming com range requests
+│   ├── movies.js                # catálogo automático + streaming com range requests
+│   └── media.js                  # faixas de áudio/legenda (ffprobe) + legendas WebVTT
 ├── lib/
-│   ├── staticServer.js          # serve o frontend e as capas (substitui express.static)
-│   └── settings.js               # leitura centralizada de config/settings.json
+│   ├── staticServer.js          # serve o frontend e as capas
+│   ├── settings.js               # leitura centralizada de config/settings.json
+│   ├── sessionToken.js            # emissão/verificação do token HMAC de sessão
+│   ├── mediaTools.js               # ffprobe com cache + extração de legendas
+│   ├── reencodeWorker.js            # worker de conversão pra mp4 (fila serial, nice -19)
+│   └── coverPicker.js                # aleatorizador de capas (frame entre 20% e 80%)
 ├── config/
 │   ├── whitelist.json             # IPs autorizados (fora do Git)
 │   ├── whitelist.example.json      # exemplo versionado no Git
-│   └── settings.json                # opções gerais (proxies confiáveis, remoção automática etc.)
+│   └── settings.json                # opções gerais (proxies, remoção automática, re-encode)
 ├── data/
-│   └── catalog.example.json         # exemplo do formato (catalog.json real é gerado, fora do Git)
+│   ├── catalog.example.json       # exemplo do formato (catalog.json real é gerado, fora do Git)
+│   ├── reencode-state.json         # estado do worker de conversão (gerado, fora do Git)
+│   └── session-secret               # segredo HMAC das sessões (gerado, fora do Git)
 ├── media/
 │   ├── movies/                     # arquivos de vídeo (fora do Git)
-│   └── covers/                      # capas dos filmes (fora do Git)
-├── public/                          # frontend (catálogo + player)
+│   └── covers/                      # capas — as automáticas ficam em covers/auto/ (fora do Git)
+├── cache/                           # legendas extraídas + temporários de conversão (fora do Git)
+├── public/                          # frontend (catálogo + player + auth com polling de 20s)
 ├── deploy/                          # exemplos de nginx e systemd (opcionais)
 └── docs/                            # documentação técnica e testes de segurança
 ```

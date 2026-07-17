@@ -3,6 +3,7 @@ const path = require('path');
 const { loadSettings } = require('../lib/settings');
 const { forgetVideo } = require('../lib/mediaTools');
 const { enfileirarNaoMp4 } = require('../lib/reencodeWorker');
+const { coverPicker } = require('../lib/coverPicker');
 
 const CATALOG_PATH = path.join(__dirname, '..', 'data', 'catalog.json');
 const MOVIES_DIR = path.join(__dirname, '..', 'media', 'movies');
@@ -97,6 +98,8 @@ function sincronizarCatalogo(arquivosEncontrados) {
     // arquivo ainda exista, e a essa altura ele já foi removido do disco.
     for (const item of removidos) {
       forgetVideo(path.normalize(path.join(MOVIES_DIR, item.arquivo)));
+      // A capa automática gerada pra esse filme também não pode ficar órfã.
+      coverPicker.removerCapa(item.arquivo);
     }
   }
 
@@ -154,6 +157,10 @@ function handleMoviesApi(req, res) {
     // conversão em background (barato e idempotente — o worker ignora o
     // que já está na fila, concluído ou com falha registrada).
     enfileirarNaoMp4(arquivos);
+
+    // Fase 4: gera capa (frame aleatório do próprio filme) pra toda entrada
+    // sem capa ou com capa local que não existe mais em disco.
+    coverPicker.garantirCapas(listaSincronizada);
 
     const overrides = {};
     listaSincronizada.forEach((item) => {
@@ -252,4 +259,4 @@ function handleStream(req, res, query) {
   }
 }
 
-module.exports = { handleMoviesApi, handleStream, resolveMoviePath, scanMoviesDir, MOVIES_DIR };
+module.exports = { handleMoviesApi, handleStream, resolveMoviePath, scanMoviesDir, sincronizarCatalogo, MOVIES_DIR };
