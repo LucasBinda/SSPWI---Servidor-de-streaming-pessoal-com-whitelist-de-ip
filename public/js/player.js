@@ -59,7 +59,7 @@ function iniciarPlayer(arquivo) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     })
-    .then(preencherFaixas)
+    .then((tracks) => preencherFaixas(tracks, video))
     .catch((err) => console.error('[player] falha ao carregar metadados do vídeo:', err));
 }
 
@@ -117,7 +117,7 @@ function configurarPainelConfiguracoes({ arquivo, video }) {
 }
 
 // Chamado quando /media/tracks responde — popula os seletores do painel.
-function preencherFaixas(tracks) {
+function preencherFaixas(tracks, video) {
   const selectAudio = document.getElementById('select-audio');
   const selectLegenda = document.getElementById('select-legenda');
 
@@ -128,14 +128,32 @@ function preencherFaixas(tracks) {
     selectAudio.appendChild(opt);
   });
 
-  // Sem transcodificação no servidor não há como remapear a faixa de áudio
-  // de um arquivo já pronto — o navegador toca a faixa padrão do container.
-  // O seletor fica visível (mostra o que existe no arquivo) mas
-  // desabilitado; a troca real de dublagem volta com a fase 2, que
-  // re-encoda os arquivos e pode definir a faixa padrão.
-  selectAudio.disabled = true;
-  if (tracks.audio.length > 1) {
-    selectAudio.title = 'Troca de faixa de áudio ficará disponível após a padronização dos arquivos (fase 2).';
+  // Troca de dublagem sem transcodificação no servidor depende da API
+  // audioTracks do próprio navegador (Safari tem; Chrome/Firefox ainda
+  // escondem atrás de flag). Três cenários, cada um explicado no tooltip
+  // em vez de um seletor mudo:
+  // 1. arquivo com UMA faixa: nada a trocar — o normal do acervo, já que a
+  //    padronização define a faixa dublada como padrão do container;
+  // 2. várias faixas + navegador com audioTracks: troca ao vivo funciona;
+  // 3. várias faixas sem a API: seletor mostra o que existe, mas explica
+  //    que o navegador não expõe a troca.
+  const suporteNativo = typeof video.audioTracks !== 'undefined';
+  if (tracks.audio.length <= 1) {
+    selectAudio.disabled = true;
+    selectAudio.title = 'Este arquivo tem uma única faixa de áudio.';
+  } else if (suporteNativo) {
+    selectAudio.disabled = false;
+    selectAudio.addEventListener('change', () => {
+      const escolhida = Number(selectAudio.value);
+      for (let i = 0; i < video.audioTracks.length; i++) {
+        video.audioTracks[i].enabled = i === escolhida;
+      }
+    });
+  } else {
+    selectAudio.disabled = true;
+    selectAudio.title =
+      'Seu navegador não expõe troca de faixa de áudio (API audioTracks). ' +
+      'No Safari funciona; em Chrome/Firefox a faixa padrão do arquivo é a que toca.';
   }
 
   tracks.subtitles.forEach((faixa) => {

@@ -99,6 +99,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
+  console.log('Lembre de abrir a porta no firewall/roteador para acesso remoto');
   console.log(`Servidor de streaming rodando na porta ${PORT}`);
   console.log(`Acesse via http://<ip-do-servidor>:${PORT}`);
 
