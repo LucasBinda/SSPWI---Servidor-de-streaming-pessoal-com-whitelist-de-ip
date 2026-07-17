@@ -2,8 +2,9 @@ const http = require('http');
 const path = require('path');
 
 const checarWhitelist = require('./middleware/ipWhitelist');
-const { handleMoviesApi, handleStream } = require('./routes/movies');
+const { handleMoviesApi, handleStream, scanMoviesDir, MOVIES_DIR } = require('./routes/movies');
 const { handleMediaTracks, handleMediaSubtitle } = require('./routes/media');
+const { prepararWorker, enfileirarNaoMp4 } = require('./lib/reencodeWorker');
 const { serveStatic } = require('./lib/staticServer');
 
 const PORT = process.env.PORT || 3000;
@@ -54,7 +55,7 @@ const server = http.createServer((req, res) => {
   // Faixas de áudio/legenda disponíveis (menu de configurações do player)
   // e extração de legenda em WebVTT sob demanda. Operações leves de ffprobe/
   // ffmpeg — a transcodificação de vídeo em tempo real (HLS) foi removida
-  // por pesar demais na CPU (ver docs/adr-001-reversao-hls.md).
+  // por pesar demais na CPU do servidor.
   if (pathname === '/media/tracks') {
     const query = Object.fromEntries(parsedUrl.searchParams);
     return handleMediaTracks(req, res, query);
@@ -78,4 +79,11 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log(`Servidor de streaming rodando na porta ${PORT}`);
   console.log(`Acesse via http://<ip-do-servidor>:${PORT}`);
+
+  // Fase 2: limpa temporários de conversões interrompidas e enfileira
+  // qualquer não-mp4 já presente no acervo (vídeos adicionados enquanto o
+  // servidor estava desligado). Novos arquivos detectados em runtime são
+  // enfileirados pelo /api/movies (routes/movies.js).
+  prepararWorker();
+  enfileirarNaoMp4(scanMoviesDir(MOVIES_DIR));
 });

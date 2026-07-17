@@ -1,4 +1,8 @@
 {
   "removerFilmesAusentesDoCatalogo": true,
-  "proxiesConfiaveis": ["127.0.0.1", "::1"]
+  "proxiesConfiaveis": ["127.0.0.1", "::1"],
+  "reencodeAtivo": true,
+  "reencodeCodec": "libx265",
+  "reencodePreset": "fast",
+  "reencodeCrf": 26
 }

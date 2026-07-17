@@ -14,8 +14,8 @@ if (!arquivo) {
 }
 
 // Reprodução direta via /stream (range requests) — o HLS on-the-fly foi
-// revertido por pesar demais na CPU do servidor (ver
-// docs/adr-001-reversao-hls.md). Com range requests o próprio <video>
+// revertido por pesar demais na CPU do servidor.
+// Com range requests o próprio <video>
 // nativo resolve seek pra qualquer ponto do arquivo, barra de progresso
 // completa e buffer, sem nenhum processo de transcodificação rodando.
 // A contrapartida: containers não-mp4 (mkv/avi) podem não tocar em todo

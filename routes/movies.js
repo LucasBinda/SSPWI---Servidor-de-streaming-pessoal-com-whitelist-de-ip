@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { loadSettings } = require('../lib/settings');
 const { forgetVideo } = require('../lib/mediaTools');
+const { enfileirarNaoMp4 } = require('../lib/reencodeWorker');
 
 const CATALOG_PATH = path.join(__dirname, '..', 'data', 'catalog.json');
 const MOVIES_DIR = path.join(__dirname, '..', 'media', 'movies');
@@ -149,6 +150,11 @@ function handleMoviesApi(req, res) {
     const arquivos = scanMoviesDir(MOVIES_DIR);
     const listaSincronizada = sincronizarCatalogo(arquivos);
 
+    // Fase 2: qualquer vídeo novo que não seja .mp4 entra na fila de
+    // conversão em background (barato e idempotente — o worker ignora o
+    // que já está na fila, concluído ou com falha registrada).
+    enfileirarNaoMp4(arquivos);
+
     const overrides = {};
     listaSincronizada.forEach((item) => {
       if (item.arquivo) overrides[item.arquivo] = item;
@@ -246,4 +252,4 @@ function handleStream(req, res, query) {
   }
 }
 
-module.exports = { handleMoviesApi, handleStream, resolveMoviePath, MOVIES_DIR };
+module.exports = { handleMoviesApi, handleStream, resolveMoviePath, scanMoviesDir, MOVIES_DIR };

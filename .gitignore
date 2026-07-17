@@ -16,6 +16,10 @@ media/covers/*
 # sua coleção pessoal de filmes. Só o .example.json é versionado.
 data/catalog.json
 
+# Estado do worker de conversão pra mp4 — gerado em runtime,
+# reflete o acervo local.
+data/reencode-state.json
+
 # Whitelist de IP — evita vazar os IPs autorizados publicamente no repositório.
 # Se preferir versionar um exemplo, use um "whitelist.example.json" à parte.
 config/whitelist.json
