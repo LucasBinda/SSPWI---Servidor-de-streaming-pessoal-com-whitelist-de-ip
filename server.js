@@ -3,8 +3,7 @@ const path = require('path');
 
 const checarWhitelist = require('./middleware/ipWhitelist');
 const { handleMoviesApi, handleStream } = require('./routes/movies');
-const { handleHlsManifest, handleHlsSegment, handleHlsClose } = require('./routes/hls');
-const { startReaper } = require('./lib/hlsSessionManager');
+const { handleMediaTracks, handleMediaSubtitle } = require('./routes/media');
 const { serveStatic } = require('./lib/staticServer');
 
 const PORT = process.env.PORT || 3000;
@@ -35,18 +34,6 @@ const server = http.createServer((req, res) => {
   // evita decodificar duas vezes o mesmo caminho.
   const pathname = parsedUrl.pathname;
 
-  // /hls/close precisa aceitar POST (o player avisa via navigator.sendBeacon
-  // no beforeunload, que sempre manda POST) — por isso essa rota é checada
-  // ANTES da restrição geral de método GET/HEAD que vem logo abaixo.
-  if (pathname === '/hls/close') {
-    if (req.method !== 'GET' && req.method !== 'POST') {
-      res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
-      return res.end('Método não suportado.');
-    }
-    const query = Object.fromEntries(parsedUrl.searchParams);
-    return handleHlsClose(req, res, query);
-  }
-
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
     return res.end('Método não suportado.');
@@ -64,15 +51,17 @@ const server = http.createServer((req, res) => {
     return handleStream(req, res, query);
   }
 
-  // HLS on-the-fly: manifesto (.m3u8) e segmentos (.ts) gerados sob demanda
-  // pelo ffmpeg. Ver lib/hlsSessionManager.js pra lógica de sessão/seek.
-  if (pathname === '/hls/manifest') {
+  // Faixas de áudio/legenda disponíveis (menu de configurações do player)
+  // e extração de legenda em WebVTT sob demanda. Operações leves de ffprobe/
+  // ffmpeg — a transcodificação de vídeo em tempo real (HLS) foi removida
+  // por pesar demais na CPU (ver docs/adr-001-reversao-hls.md).
+  if (pathname === '/media/tracks') {
     const query = Object.fromEntries(parsedUrl.searchParams);
-    return handleHlsManifest(req, res, query);
+    return handleMediaTracks(req, res, query);
   }
-  if (pathname === '/hls/segment') {
+  if (pathname === '/media/subtitle') {
     const query = Object.fromEntries(parsedUrl.searchParams);
-    return handleHlsSegment(req, res, query);
+    return handleMediaSubtitle(req, res, query);
   }
 
   // Capas dos filmes
@@ -89,5 +78,4 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log(`Servidor de streaming rodando na porta ${PORT}`);
   console.log(`Acesse via http://<ip-do-servidor>:${PORT}`);
-  startReaper();
 });

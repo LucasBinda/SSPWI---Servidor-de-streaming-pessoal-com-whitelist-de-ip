@@ -13,57 +13,220 @@ if (!arquivo) {
   iniciarPlayer(arquivo);
 }
 
-// Fase 1 (HLS on-the-fly): troca o /stream direto por um manifesto .m3u8
-// gerado sob demanda pelo ffmpeg no backend (routes/hls.js). Isso resolve
-// o "erro de rede" e a trava no seek que aconteciam com containers que não
-// são .mp4 faststart — o player agora troca segmentos discretos em vez de
-// pular pra bytes arbitrários do arquivo original.
-//
-// Seletor de áudio/legenda e equalizador entram numa fase seguinte; por
-// enquanto é sempre audio=0 (primeira faixa de áudio do arquivo).
+// Reprodução direta via /stream (range requests) — o HLS on-the-fly foi
+// revertido por pesar demais na CPU do servidor (ver
+// docs/adr-001-reversao-hls.md). Com range requests o próprio <video>
+// nativo resolve seek pra qualquer ponto do arquivo, barra de progresso
+// completa e buffer, sem nenhum processo de transcodificação rodando.
+// A contrapartida: containers não-mp4 (mkv/avi) podem não tocar em todo
+// navegador — a padronização pra mp4 é o trabalho da fase 2.
 function iniciarPlayer(arquivo) {
   const video = document.getElementById('video-player');
-  const manifestUrl = `/hls/manifest?arquivo=${encodeURIComponent(arquivo)}&audio=0`;
 
-  if (Hls.isSupported()) {
-    const hls = new Hls({
-      maxBufferLength: 30,
-      // o manifesto pode não ter #EXT-X-ENDLIST ainda (ffmpeg ainda
-      // transcodificando) — o hls.js já sabe recarregar como "event" stream
-      // nesse caso, sem configuração extra.
-    });
-
-    hls.on(Hls.Events.ERROR, (_evt, data) => {
-      if (!data.fatal) return;
-      console.error('[player] erro fatal do hls.js:', data.type, data.details);
-      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-        hls.startLoad();
-      } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-        hls.recoverMediaError();
-      }
-    });
-
-    hls.loadSource(manifestUrl);
-    hls.attachMedia(video);
-  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    // Safari toca HLS nativamente, sem precisar do hls.js
-    video.src = manifestUrl;
-  } else {
-    document.getElementById('descricao-filme').textContent =
-      'Seu navegador não tem suporte a HLS. Atualize o navegador ou use outro.';
-    return;
-  }
+  video.src = `/stream?arquivo=${encodeURIComponent(arquivo)}`;
 
   video.play().catch(() => {
     /* autoplay bloqueado pelo navegador — o usuário dá play manualmente */
   });
 
-  // Avisa o backend pra encerrar o ffmpeg e limpar o cache assim que o
-  // vídeo é fechado, em vez de esperar os 2min do reaper — importante
-  // porque o servidor tem pouco espaço em disco.
-  const fecharSessao = () => {
-    navigator.sendBeacon(`/hls/close?arquivo=${encodeURIComponent(arquivo)}&audio=0`);
-  };
-  window.addEventListener('beforeunload', fecharSessao);
-  window.addEventListener('pagehide', fecharSessao);
+  // Formato que o navegador não decodifica (mkv no Safari, codec sem
+  // suporte etc.) cai aqui — melhor uma mensagem clara do que um player
+  // preto sem explicação.
+  video.addEventListener('error', () => {
+    document.getElementById('descricao-filme').textContent =
+      'Seu navegador não conseguiu reproduzir este arquivo. Formatos como MKV/AVI ' +
+      'dependem do navegador — este vídeo será convertido para MP4 pela otimização de armazenamento.';
+  });
+
+  configurarPainelConfiguracoes({ arquivo, video });
+  configurarEqualizador(video);
+
+  // Metadados (faixas de áudio/legenda) chegam em paralelo, sem bloquear o
+  // início da reprodução acima.
+  fetch(`/media/tracks?arquivo=${encodeURIComponent(arquivo)}`)
+    .then((res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    })
+    .then(preencherFaixas)
+    .catch((err) => console.error('[player] falha ao carregar metadados do vídeo:', err));
+}
+
+function rotuloFaixa(faixa, tipo) {
+  const partes = [];
+  if (faixa.titulo) {
+    partes.push(faixa.titulo);
+  } else {
+    partes.push(tipo === 'audio' ? `Áudio ${faixa.index + 1}` : `Legenda ${faixa.index + 1}`);
+  }
+  if (faixa.idioma && faixa.idioma !== 'und') partes.push(`(${faixa.idioma})`);
+  if (tipo === 'audio' && faixa.canais) partes.push(`· ${faixa.canais}ch`);
+  return partes.join(' ');
+}
+
+// Botão de engrenagem: abre/fecha o painel e liga o seletor de legenda.
+// Legenda é extraída à parte via /media/subtitle (operação leve, com cache)
+// e entra como uma <track> nativa do <video> — trocar de legenda nunca
+// interrompe o vídeo que já está tocando.
+function configurarPainelConfiguracoes({ arquivo, video }) {
+  const btnConfig = document.getElementById('btn-config');
+  const painel = document.getElementById('painel-config');
+  const selectLegenda = document.getElementById('select-legenda');
+
+  btnConfig.addEventListener('click', () => {
+    const estaAberto = !painel.hidden;
+    painel.hidden = estaAberto;
+    btnConfig.setAttribute('aria-expanded', String(!estaAberto));
+  });
+
+  let trackEl = null;
+  selectLegenda.addEventListener('change', () => {
+    if (trackEl) {
+      video.removeChild(trackEl);
+      trackEl = null;
+    }
+
+    const subIndex = selectLegenda.value;
+    if (subIndex === '') return;
+
+    trackEl = document.createElement('track');
+    trackEl.kind = 'subtitles';
+    trackEl.label = selectLegenda.selectedOptions[0].textContent;
+    trackEl.src = `/media/subtitle?arquivo=${encodeURIComponent(arquivo)}&sub=${encodeURIComponent(subIndex)}`;
+    trackEl.default = true;
+    video.appendChild(trackEl);
+
+    // Adicionar <track> depois que o vídeo já está tocando nem sempre ativa
+    // sozinho em todo navegador — força o modo "showing" quando o WebVTT
+    // termina de carregar.
+    trackEl.addEventListener('load', () => {
+      if (trackEl.track) trackEl.track.mode = 'showing';
+    });
+  });
+}
+
+// Chamado quando /media/tracks responde — popula os seletores do painel.
+function preencherFaixas(tracks) {
+  const selectAudio = document.getElementById('select-audio');
+  const selectLegenda = document.getElementById('select-legenda');
+
+  tracks.audio.forEach((faixa) => {
+    const opt = document.createElement('option');
+    opt.value = String(faixa.index);
+    opt.textContent = rotuloFaixa(faixa, 'audio');
+    selectAudio.appendChild(opt);
+  });
+
+  // Sem transcodificação no servidor não há como remapear a faixa de áudio
+  // de um arquivo já pronto — o navegador toca a faixa padrão do container.
+  // O seletor fica visível (mostra o que existe no arquivo) mas
+  // desabilitado; a troca real de dublagem volta com a fase 2, que
+  // re-encoda os arquivos e pode definir a faixa padrão.
+  selectAudio.disabled = true;
+  if (tracks.audio.length > 1) {
+    selectAudio.title = 'Troca de faixa de áudio ficará disponível após a padronização dos arquivos (fase 2).';
+  }
+
+  tracks.subtitles.forEach((faixa) => {
+    const opt = document.createElement('option');
+    opt.value = String(faixa.index);
+    opt.textContent = rotuloFaixa(faixa, 'legenda');
+    selectLegenda.appendChild(opt);
+  });
+}
+
+// Equalizador via Web Audio API. O AudioContext só pode ser criado (ou
+// retomado, se suspenso) a partir de um gesto do usuário — política de
+// autoplay dos navegadores — então todo o grafo de áudio é montado de
+// forma preguiçosa, só no primeiro clique em "Equalizador".
+function configurarEqualizador(video) {
+  const btnEq = document.getElementById('btn-equalizador');
+  const painelEq = document.getElementById('painel-equalizador');
+
+  const BANDAS_HZ = [60, 170, 350, 1000, 3500, 10000];
+  let audioCtx = null;
+
+  function montarGrafoDeAudio() {
+    if (audioCtx) return;
+
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    // createMediaElementSource só pode ser chamado UMA vez por elemento, e
+    // a partir daí TODO o áudio do <video> passa a sair pelo grafo do Web
+    // Audio API — por isso a cadeia precisa terminar em audioCtx.destination,
+    // senão o áudio simplesmente emudece.
+    const source = audioCtx.createMediaElementSource(video);
+
+    // Nivelamento automático de volume, ligado por padrão (trecho muito
+    // alto abaixa um pouco, trecho muito baixo sobe um pouco). Isso é
+    // dinâmica de AMPLITUDE — não tem relação com as bandas de frequência
+    // abaixo, que continuam neutras (0dB) até o usuário mexer.
+    // threshold/ratio moderados (não é um limiter agressivo) + um pequeno
+    // ganho de compensação depois, pra recuperar o volume médio que a
+    // compressão tira.
+    const compressor = audioCtx.createDynamicsCompressor();
+    compressor.threshold.value = -30;
+    compressor.knee.value = 20;
+    compressor.ratio.value = 3;
+    compressor.attack.value = 0.02;
+    compressor.release.value = 0.3;
+
+    const ganhoCompensacao = audioCtx.createGain();
+    ganhoCompensacao.gain.value = 1.4; // ~+3dB, compensa a redução média da compressão
+
+    source.connect(compressor);
+    let node = ganhoCompensacao;
+    compressor.connect(ganhoCompensacao);
+
+    BANDAS_HZ.forEach((freq) => {
+      const filtro = audioCtx.createBiquadFilter();
+      filtro.type = 'peaking';
+      filtro.frequency.value = freq;
+      filtro.Q.value = 1;
+      filtro.gain.value = 0;
+      node.connect(filtro);
+      node = filtro;
+
+      const linha = document.createElement('div');
+      linha.className = 'linha-eq';
+
+      const rotulo = document.createElement('label');
+      rotulo.className = 'rotulo-eq';
+      rotulo.textContent = freq >= 1000 ? `${freq / 1000}kHz` : `${freq}Hz`;
+
+      const slider = document.createElement('input');
+      slider.type = 'range';
+      slider.min = '-12';
+      slider.max = '12';
+      slider.step = '1';
+      slider.value = '0';
+      slider.className = 'slider-eq';
+      slider.setAttribute('aria-label', `Ganho em ${rotulo.textContent}`);
+
+      const valor = document.createElement('span');
+      valor.className = 'valor-eq';
+      valor.textContent = '0dB';
+
+      slider.addEventListener('input', () => {
+        const db = Number(slider.value);
+        filtro.gain.value = db;
+        valor.textContent = `${db > 0 ? '+' : ''}${db}dB`;
+      });
+
+      linha.appendChild(rotulo);
+      linha.appendChild(slider);
+      linha.appendChild(valor);
+      painelEq.appendChild(linha);
+    });
+    node.connect(audioCtx.destination);
+  }
+
+  btnEq.addEventListener('click', () => {
+    montarGrafoDeAudio();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const estaAberto = !painelEq.hidden;
+    painelEq.hidden = estaAberto;
+    btnEq.setAttribute('aria-expanded', String(!estaAberto));
+  });
 }

@@ -170,6 +170,136 @@ main {
   display: block;
 }
 
+/* Menu de configurações do player (áudio, legenda, equalizador) */
+.video-shell {
+  position: relative;
+}
+
+.btn-config {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: rgba(23, 21, 18, 0.75);
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-config:hover,
+.btn-config:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.painel-config {
+  position: absolute;
+  top: 54px;
+  right: 12px;
+  width: 260px;
+  max-width: calc(100% - 24px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  z-index: 5;
+}
+
+.painel-secao {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.painel-secao + .painel-secao {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.painel-secao label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.painel-secao select {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.painel-secao select:disabled {
+  opacity: 0.5;
+}
+
+.btn-toggle-eq {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.btn-toggle-eq:hover,
+.btn-toggle-eq:focus-visible {
+  border-color: var(--accent);
+}
+
+.painel-equalizador {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Sem isso, o atributo "hidden" do HTML perde do "display: flex" acima:
+   as duas regras têm a mesma especificidade (0-1-0) e a folha de estilo do
+   autor sempre vence a do navegador em caso de empate — então o painel
+   ficava sempre visível mesmo com o atributo hidden aplicado, e o botão
+   "Equalizador" parecia não fechar nada ao clicar de novo. */
+.painel-equalizador[hidden] {
+  display: none;
+}
+
+.linha-eq {
+  display: grid;
+  grid-template-columns: 48px 1fr 40px;
+  align-items: center;
+  gap: 8px;
+}
+
+.rotulo-eq {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.slider-eq {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.valor-eq {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
 .player-wrap h1 {
   font-size: 32px;
   font-weight: 400;

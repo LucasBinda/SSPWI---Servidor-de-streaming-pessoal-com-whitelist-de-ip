@@ -14,19 +14,35 @@
   </div>
 
   <div class="player-wrap">
-    <video id="video-player" controls autoplay></video>
+    <div class="video-shell">
+      <video id="video-player" controls autoplay></video>
+
+      <button id="btn-config" class="btn-config" type="button" aria-label="Configurações do player" aria-expanded="false">⚙</button>
+
+      <div id="painel-config" class="painel-config" hidden>
+        <div class="painel-secao">
+          <label for="select-audio">Áudio</label>
+          <select id="select-audio"></select>
+        </div>
+
+        <div class="painel-secao">
+          <label for="select-legenda">Legenda</label>
+          <select id="select-legenda">
+            <option value="">Nenhuma</option>
+          </select>
+        </div>
+
+        <div class="painel-secao">
+          <button id="btn-equalizador" type="button" class="btn-toggle-eq" aria-expanded="false">Equalizador de áudio</button>
+          <div id="painel-equalizador" class="painel-equalizador" hidden></div>
+        </div>
+      </div>
+    </div>
+
     <h1 class="marquee-font" id="titulo-filme"></h1>
     <p id="descricao-filme"></p>
   </div>
 
-  <!--
-    Única dependência de terceiros do projeto. Reproduzir HLS sem isso exigiria
-    reimplementar parser de .m3u8 + Media Source Extensions do zero — o Safari
-    tem suporte nativo (por isso o player.js checa canPlayType antes de usar
-    isso), mas Chrome/Firefox não. Se preferir remover, o player.js cai pra
-    "não suportado" nesses navegadores.
-  -->
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
   <script src="/js/player.js"></script>
 </body>
 </html>

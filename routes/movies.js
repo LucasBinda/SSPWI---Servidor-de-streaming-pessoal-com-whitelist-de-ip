@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { loadSettings } = require('../lib/settings');
+const { forgetVideo } = require('../lib/mediaTools');
 
 const CATALOG_PATH = path.join(__dirname, '..', 'data', 'catalog.json');
 const MOVIES_DIR = path.join(__dirname, '..', 'media', 'movies');
@@ -85,6 +86,17 @@ function sincronizarCatalogo(arquivosEncontrados) {
   if (settings.removerFilmesAusentesDoCatalogo) {
     removidos = listaAtual.filter((item) => item.arquivo && !encontradosSet.has(item.arquivo));
     listaBase = listaAtual.filter((item) => !item.arquivo || encontradosSet.has(item.arquivo));
+
+    // Interliga com o cache de mídia: um filme removido de media/movies/
+    // não deve deixar legenda extraída nem metadado de ffprobe órfão pra
+    // trás (ver forgetVideo em lib/mediaTools.js). Usa o mesmo
+    // path.normalize(path.join(MOVIES_DIR, ...)) de resolveMoviePath pra
+    // bater exatamente com a chave de cache usada durante a reprodução —
+    // não dá pra chamar resolveMoviePath aqui porque ele exige que o
+    // arquivo ainda exista, e a essa altura ele já foi removido do disco.
+    for (const item of removidos) {
+      forgetVideo(path.normalize(path.join(MOVIES_DIR, item.arquivo)));
+    }
   }
 
   if (faltando.length === 0 && removidos.length === 0) {
@@ -168,9 +180,9 @@ function handleMoviesApi(req, res) {
 // Resolve um caminho relativo (vindo de query.arquivo) pra um caminho
 // absoluto DENTRO de media/movies, ou retorna null se for inválido/ausente.
 // Extraído do handleStream original pra virar a ÚNICA função que decide
-// "esse caminho é seguro" — tanto o /stream quanto o /hls/* (novo) usam
-// esta mesma validação, em vez de reimplementar a checagem de path
-// traversal em dois lugares.
+// "esse caminho é seguro" — tanto o /stream quanto o /media/* usam esta
+// mesma validação, em vez de reimplementar a checagem de path traversal
+// em dois lugares.
 function resolveMoviePath(relPath) {
   if (!relPath) return null;
 
