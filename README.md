@@ -245,6 +245,24 @@ de qualquer IP **até expirar** — o teto de 7 dias e o `HttpOnly` limitam a
 janela; se suspeitar de vazamento, apague `data/session-secret` e reinicie
 (todas as sessões caem na hora).
 
+## Tempo assistido (retomar de onde parou)
+
+O player salva a minutagem de cada filme **por usuário** (o id do cookie de
+login) e retoma de onde a pessoa parou — com 3s de recuo pra recuperar o
+contexto da cena. Os vídeos ficam no file system; a minutagem fica separada
+em `data/watchtime.json` (fora do Git), o "banco de dados" do projeto.
+
+- A gravação é leve: um `sendBeacon` a cada 15s enquanto toca, ao pausar e
+  ao fechar a aba (o `sendBeacon` sobrevive ao fechamento — justamente o
+  momento mais importante de salvar).
+- Filme assistido até o fim zera a minutagem — a próxima sessão começa do
+  início em vez de "retomar" nos créditos; perto do fim (>95%) também não
+  retoma.
+- Registros sem atualização há mais de 7 dias (o teto de vida de um login)
+  são podados automaticamente — o arquivo não cresce pra sempre.
+- Se o worker de conversão renomear um arquivo (`.mkv` → `.mp4`), a
+  minutagem de todos os usuários acompanha o nome novo.
+
 ## Rodando
 
 ```bash
@@ -287,11 +305,13 @@ streaming-server/
 │   └── ipMatch.js                # comparação de IP exato ou faixa CIDR
 ├── routes/
 │   ├── movies.js                # catálogo automático + streaming com range requests
-│   └── media.js                  # faixas de áudio/legenda (ffprobe) + legendas WebVTT
+│   ├── media.js                  # faixas de áudio/legenda (ffprobe) + legendas WebVTT
+│   └── watchTime.js               # minutagem assistida por usuário (get/save leves)
 ├── lib/
 │   ├── staticServer.js          # serve o frontend e as capas
 │   ├── settings.js               # leitura centralizada de config/settings.json
 │   ├── sessionToken.js            # emissão/verificação do token HMAC de sessão
+│   ├── watchTime.js                # persistência da minutagem por usuário (data/watchtime.json)
 │   ├── mediaTools.js               # ffprobe com cache + extração de legendas
 │   ├── reencodeWorker.js            # worker de conversão pra mp4 (fila serial, nice -19)
 │   └── coverPicker.js                # aleatorizador de capas (frame entre 20% e 80%)
@@ -302,7 +322,8 @@ streaming-server/
 ├── data/
 │   ├── catalog.example.json       # exemplo do formato (catalog.json real é gerado, fora do Git)
 │   ├── reencode-state.json         # estado do worker de conversão (gerado, fora do Git)
-│   └── session-secret               # segredo HMAC das sessões (gerado, fora do Git)
+│   ├── session-secret               # segredo HMAC das sessões (gerado, fora do Git)
+│   └── watchtime.json                # minutagem por usuário (gerado, fora do Git)
 ├── media/
 │   ├── movies/                     # arquivos de vídeo (fora do Git)
 │   └── covers/                      # capas — as automáticas ficam em covers/auto/ (fora do Git)

@@ -5,6 +5,7 @@ const checarWhitelist = require('./middleware/ipWhitelist');
 const { handleAuthSession, checarSessao } = require('./middleware/sessionCookie');
 const { handleMoviesApi, handleStream, scanMoviesDir, sincronizarCatalogo, MOVIES_DIR } = require('./routes/movies');
 const { handleMediaTracks, handleMediaSubtitle } = require('./routes/media');
+const { handleWatchTimeGet, handleWatchTimeSave } = require('./routes/watchTime');
 const { prepararWorker, enfileirarNaoMp4 } = require('./lib/reencodeWorker');
 const { coverPicker } = require('./lib/coverPicker');
 const { serveStatic } = require('./lib/staticServer');
@@ -36,6 +37,19 @@ const server = http.createServer((req, res) => {
   // única vez) é o serveStatic, na hora de resolver o arquivo real — assim
   // evita decodificar duas vezes o mesmo caminho.
   const pathname = parsedUrl.pathname;
+
+  // /watchtime/save aceita POST (o player grava via navigator.sendBeacon,
+  // que sempre manda POST) — por isso é checado ANTES da restrição geral
+  // de método GET/HEAD logo abaixo. A sessão é validada dentro do handler
+  // (precisa do uid do cookie de qualquer forma).
+  if (pathname === '/watchtime/save') {
+    if (req.method !== 'GET' && req.method !== 'POST') {
+      res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end('Método não suportado.');
+    }
+    const query = Object.fromEntries(parsedUrl.searchParams);
+    return handleWatchTimeSave(req, res, query);
+  }
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -85,6 +99,12 @@ const server = http.createServer((req, res) => {
   if (pathname === '/media/subtitle') {
     const query = Object.fromEntries(parsedUrl.searchParams);
     return handleMediaSubtitle(req, res, query);
+  }
+
+  // Watch time: minutagem salva por usuário (uid do cookie de sessão).
+  if (pathname === '/watchtime/get') {
+    const query = Object.fromEntries(parsedUrl.searchParams);
+    return handleWatchTimeGet(req, res, query);
   }
 
   // Capas dos filmes

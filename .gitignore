@@ -24,6 +24,9 @@ data/reencode-state.json
 # permitiria forjar cookies de sessão.
 data/session-secret
 
+# Minutagem assistida por usuário — gerado em runtime.
+data/watchtime.json
+
 # Whitelist de IP — evita vazar os IPs autorizados publicamente no repositório.
 # Se preferir versionar um exemplo, use um "whitelist.example.json" à parte.
 config/whitelist.json
