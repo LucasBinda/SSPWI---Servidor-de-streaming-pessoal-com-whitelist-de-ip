@@ -20,6 +20,10 @@ data/catalog.json
 # Se preferir versionar um exemplo, use um "whitelist.example.json" à parte.
 config/whitelist.json
 
+# Cache de HLS — segmentos .ts e manifestos temporários gerados sob demanda
+# pelo ffmpeg (lib/hlsSessionManager.js). Recriado a cada sessão de playback.
+cache/
+
 # Logs
 *.log
 npm-debug.log*

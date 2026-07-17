@@ -3,6 +3,8 @@ const path = require('path');
 
 const checarWhitelist = require('./middleware/ipWhitelist');
 const { handleMoviesApi, handleStream } = require('./routes/movies');
+const { handleHlsManifest, handleHlsSegment, handleHlsClose } = require('./routes/hls');
+const { startReaper } = require('./lib/hlsSessionManager');
 const { serveStatic } = require('./lib/staticServer');
 
 const PORT = process.env.PORT || 3000;
@@ -14,11 +16,6 @@ const server = http.createServer((req, res) => {
   // escreve a resposta 403 sozinha e retorna false — a requisição para aqui.
   if (!checarWhitelist(req, res)) {
     return;
-  }
-
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
-    return res.end('Método não suportado.');
   }
 
   // API WHATWG URL (new URL / URLSearchParams) no lugar do antigo
@@ -38,6 +35,23 @@ const server = http.createServer((req, res) => {
   // evita decodificar duas vezes o mesmo caminho.
   const pathname = parsedUrl.pathname;
 
+  // /hls/close precisa aceitar POST (o player avisa via navigator.sendBeacon
+  // no beforeunload, que sempre manda POST) — por isso essa rota é checada
+  // ANTES da restrição geral de método GET/HEAD que vem logo abaixo.
+  if (pathname === '/hls/close') {
+    if (req.method !== 'GET' && req.method !== 'POST') {
+      res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end('Método não suportado.');
+    }
+    const query = Object.fromEntries(parsedUrl.searchParams);
+    return handleHlsClose(req, res, query);
+  }
+
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('Método não suportado.');
+  }
+
   // API do catálogo
   if (pathname === '/api/movies') {
     return handleMoviesApi(req, res);
@@ -48,6 +62,17 @@ const server = http.createServer((req, res) => {
   if (pathname === '/stream') {
     const query = Object.fromEntries(parsedUrl.searchParams);
     return handleStream(req, res, query);
+  }
+
+  // HLS on-the-fly: manifesto (.m3u8) e segmentos (.ts) gerados sob demanda
+  // pelo ffmpeg. Ver lib/hlsSessionManager.js pra lógica de sessão/seek.
+  if (pathname === '/hls/manifest') {
+    const query = Object.fromEntries(parsedUrl.searchParams);
+    return handleHlsManifest(req, res, query);
+  }
+  if (pathname === '/hls/segment') {
+    const query = Object.fromEntries(parsedUrl.searchParams);
+    return handleHlsSegment(req, res, query);
   }
 
   // Capas dos filmes
@@ -64,4 +89,5 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log(`Servidor de streaming rodando na porta ${PORT}`);
   console.log(`Acesse via http://<ip-do-servidor>:${PORT}`);
+  startReaper();
 });

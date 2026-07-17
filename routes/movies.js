@@ -165,6 +165,24 @@ function handleMoviesApi(req, res) {
   }
 }
 
+// Resolve um caminho relativo (vindo de query.arquivo) pra um caminho
+// absoluto DENTRO de media/movies, ou retorna null se for inválido/ausente.
+// Extraído do handleStream original pra virar a ÚNICA função que decide
+// "esse caminho é seguro" — tanto o /stream quanto o /hls/* (novo) usam
+// esta mesma validação, em vez de reimplementar a checagem de path
+// traversal em dois lugares.
+function resolveMoviePath(relPath) {
+  if (!relPath) return null;
+
+  const filePath = path.normalize(path.join(MOVIES_DIR, relPath));
+  const moviesDirComBarra = MOVIES_DIR + path.sep;
+  if (!filePath.startsWith(moviesDirComBarra)) return null;
+
+  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return null;
+
+  return filePath;
+}
+
 // GET /stream?arquivo=<caminho relativo dentro de media/movies>
 // query já vem interpretado (objeto) de quem chamou esta função.
 function handleStream(req, res, query) {
@@ -174,19 +192,10 @@ function handleStream(req, res, query) {
     return res.end('Parâmetro "arquivo" ausente.');
   }
 
-  // Resolve o caminho final e garante que ele continua DENTRO de
-  // MOVIES_DIR — impede "../../etc/passwd" e afins, mesmo com subpastas
-  // permitidas.
-  const filePath = path.normalize(path.join(MOVIES_DIR, relPath));
-  const moviesDirComBarra = MOVIES_DIR + path.sep;
-  if (!filePath.startsWith(moviesDirComBarra)) {
-    res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
-    return res.end('Caminho inválido.');
-  }
-
-  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+  const filePath = resolveMoviePath(relPath);
+  if (!filePath) {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-    return res.end('Arquivo não encontrado.');
+    return res.end('Arquivo não encontrado ou caminho inválido.');
   }
 
   const stat = fs.statSync(filePath);
@@ -225,4 +234,4 @@ function handleStream(req, res, query) {
   }
 }
 
-module.exports = { handleMoviesApi, handleStream };
+module.exports = { handleMoviesApi, handleStream, resolveMoviePath, MOVIES_DIR };
