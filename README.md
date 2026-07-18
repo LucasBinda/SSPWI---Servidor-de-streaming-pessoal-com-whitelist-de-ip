@@ -14,8 +14,9 @@ segundo plano:
   `docs/fase2-worker-reencode.md`).
 - **Capas automáticas**: filme sem capa ganha uma — um frame aleatório do
   próprio vídeo, extraído entre 20% e 80% da duração.
-- **Sessão auto-renovável**: além da whitelist de IP, as rotas de conteúdo
-  exigem um cookie de sessão assinado (HMAC) vinculado ao IP; o front-end
+- **Login persistente**: além da whitelist de IP, as rotas de conteúdo
+  exigem um cookie de sessão assinado (HMAC) que identifica o usuário e
+  sobrevive a troca de IP (renovação de 2 dias, teto de 7); o front-end
   renova em background e, se for barrado, tenta reautorizar a cada 20
   segundos (populando o log de segurança a cada tentativa).
 
@@ -24,45 +25,67 @@ legenda (extraída na hora de dentro do arquivo, se houver), lista das
 faixas de áudio e um equalizador de 6 bandas com nivelamento automático de
 volume (Web Audio API, tudo no navegador).
 
-## Requisitos
+## Requisitos obrigatórios
 
-- Node.js 18 ou superior (sem dependências de terceiros do npm)
-- `ffmpeg` e `ffprobe` no PATH — usados pra conversão automática pra
-  `.mp4`, extração de legendas embutidas e geração das capas. No Arch/
-  CachyOS: `pacman -S ffmpeg`; no Debian/Ubuntu: `apt install ffmpeg`.
+Sem qualquer um destes o servidor não funciona:
 
-## Instalação
+1. **Node.js 18 ou superior** — todo o servidor roda só com módulos nativos
+   (`http`, `fs`, `path`, `crypto`, `child_process`); não existe
+   `node_modules/` nem `npm install` pra rodar.
+2. **`ffmpeg` e `ffprobe` no PATH** — usados pela conversão automática pra
+   `.mp4`, pela extração de legendas embutidas e pela geração das capas.
+   No Arch/CachyOS: `pacman -S ffmpeg`; no Debian/Ubuntu:
+   `apt install ffmpeg`. Confira com `ffmpeg -version`.
+3. **`config/whitelist.json` criado e com os seus IPs** — sem esse arquivo
+   toda requisição responde erro 500; com ele vazio, ninguém entra. Veja o
+   passo 1 de "Como rodar" abaixo.
 
-Não há nada do npm para instalar. Esta versão usa só módulos nativos do
-Node.js (`http`, `fs`, `path`, `crypto`, `child_process`) — não existe
-`node_modules/` nem pacotes baixados. Basta ter Node.js + ffmpeg instalados
-e rodar direto (veja "Rodando" mais abaixo).
+## Como rodar
+
+```bash
+# 1. crie a whitelist a partir do exemplo e edite com os IPs autorizados
+#    (inclua 127.0.0.1 para testar da própria máquina)
+cp config/whitelist.example.json config/whitelist.json
+
+# 2. coloque seus vídeos em media/movies/ (qualquer formato — ver abaixo)
+mv /caminho/dos/seus/filmes/* media/movies/
+
+# 3. suba o servidor (porta 3000 por padrão; ajuste com PORT=8080 etc.)
+npm start
+```
+
+Acesse `http://<ip-do-servidor>:3000` de qualquer máquina cujo IP esteja na
+whitelist. O catálogo, as capas, a conversão de formato e o cookie de login
+acontecem sozinhos a partir daí.
+
+Para acessar o servidor pelo ipv6: `http://[<ip-do-servidor>]:3000` use os colchetes em volta do ip.
 
 ## Adicionando filmes
 
-O catálogo é montado **automaticamente**: o servidor escaneia `media/movies/`
-(incluindo subpastas) a cada vez que a página é carregada, e gera um título a
-partir do nome do arquivo. Não é preciso editar nada — basta copiar os
-arquivos:
+Basta copiar os arquivos pra `media/movies/` (subpastas valem e viram
+organização livre sua) — **o formato não importa**: o worker de
+padronização converte qualquer coisa pra `.mp4` sozinho, então pode jogar
+MKV, AVI, WEBM, MOV ou OGG direto na pasta. O catálogo é montado
+automaticamente (o servidor escaneia a pasta no boot e a cada carga da
+página, gerando título a partir do nome do arquivo):
 
 ```
 media/movies/
 ├── filme-solto.mp4
 ├── acao/
-│   └── filme-de-acao.mkv
+│   └── filme-de-acao.mkv      <- será convertido pra .mp4 sozinho
 └── comedia/
-    └── outro-filme.mp4
+    └── outro-filme.avi        <- idem
 ```
 
-Formatos aceitos: `.mp4`, `.mkv`, `.webm`, `.mov`, `.avi`, `.ogg` — mas
-você não precisa converter nada na mão: qualquer arquivo que não seja
-`.mp4` entra automaticamente na fila do **worker de padronização**, que o
-converte pra `.mp4` em background (com `nice -19`, sem disputar CPU com
-quem está assistindo) e substitui o original depois de verificar que a
-conversão deu certo. Fontes já em HEVC/AV1 são só remuxadas (segundos, sem
-perda); codecs antigos são re-encodados pra H.265 poupando espaço em disco.
-O progresso fica em `data/reencode-state.json` e no log do servidor;
-detalhes e configuração em `docs/fase2-worker-reencode.md`.
+Como funciona a padronização: qualquer arquivo que não seja `.mp4` entra na
+fila do **worker de conversão**, que roda em background com prioridade
+mínima de CPU (`nice -19`, sem disputar com quem está assistindo) e
+substitui o original **só depois** de verificar que a conversão deu certo.
+Fontes já em HEVC/AV1 são só remuxadas (segundos, sem perda de qualidade);
+codecs antigos são re-encodados pra H.265, poupando espaço em disco. O
+progresso fica em `data/reencode-state.json` e no log do servidor; detalhes
+e configuração em `docs/fase2-worker-reencode.md`.
 
 Enquanto a conversão não termina, o arquivo original ainda aparece no
 catálogo — se o navegador do PC remoto não tocar aquele formato, o player
@@ -120,6 +143,10 @@ Regras que ele segue:
 - Não gostou do frame sorteado? Apague o jpg em `media/covers/auto/` (um
   novo ponto aleatório é sorteado) ou aponte o campo `capa` pra uma imagem
   sua.
+- Quer capas "vivas"? Com `"trocarCapasAutoNoCatalogo": true` em
+  `config/settings.json`, cada carga do catálogo sorteia um frame novo pra
+  todas as capas automáticas (as definidas à mão continuam intocadas).
+  Padrão: `false` — a capa sorteada na primeira vez fica fixa.
 
 ### Remoção automática de filmes apagados
 
@@ -262,14 +289,6 @@ em `data/watchtime.json` (fora do Git), o "banco de dados" do projeto.
   são podados automaticamente — o arquivo não cresce pra sempre.
 - Se o worker de conversão renomear um arquivo (`.mkv` → `.mp4`), a
   minutagem de todos os usuários acompanha o nome novo.
-
-## Rodando
-
-```bash
-npm start
-```
-
-Acesse em `http://<ip-do-servidor>:3000` a partir do PC remoto autorizado.
 
 ## Segurança — recomendações além do essencial
 
