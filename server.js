@@ -6,6 +6,7 @@ const { handleAuthSession, checarSessao } = require('./middleware/sessionCookie'
 const { handleMoviesApi, handleStream, scanMoviesDir, sincronizarCatalogo, MOVIES_DIR } = require('./routes/movies');
 const { handleMediaTracks, handleMediaSubtitle } = require('./routes/media');
 const { handleWatchTimeGet, handleWatchTimeSave } = require('./routes/watchTime');
+const { podarOrfaos } = require('./lib/watchTime');
 const { prepararWorker, enfileirarNaoMp4 } = require('./lib/reencodeWorker');
 const { coverPicker } = require('./lib/coverPicker');
 const { serveStatic } = require('./lib/staticServer');
@@ -135,4 +136,16 @@ server.listen(PORT, () => {
   // visita) e gera capa pra quem não tem — ou pra quem referencia uma capa
   // local que não existe mais em disco.
   coverPicker.garantirCapas(sincronizarCatalogo(arquivos));
+
+  // Higiene de dados atrelados a cookies mortos, INDEPENDENTE de tráfego:
+  // minutagem de logins expirados (data/watchtime.json) e entradas
+  // automáticas vencidas da whitelist. Roda no boot e a cada 6h — garante
+  // que cookie deletado/expirado leva os dados dele junto mesmo que
+  // ninguém mais use o servidor pra disparar as podas de gravação.
+  const limparDadosDeSessoesMortas = () => {
+    podarOrfaos();
+    checarWhitelist.podarAutoIpsExpirados();
+  };
+  limparDadosDeSessoesMortas();
+  setInterval(limparDadosDeSessoesMortas, 6 * 60 * 60 * 1000).unref();
 });

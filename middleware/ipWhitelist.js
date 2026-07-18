@@ -54,6 +54,32 @@ function autoAutorizarIp(ip, sessao) {
   }
 }
 
+// Varredura periódica (server.js: boot + intervalo): remove do
+// whitelist.json as entradas automáticas vencidas. Elas já NÃO davam
+// acesso (toda checagem exige expiraEm > agora), mas ficavam gravadas no
+// arquivo — par IP+usuário de sessões mortas — até o próximo evento de
+// auto-autorização, que podia nunca acontecer. Cookie morto => rastro
+// some do arquivo na varredura seguinte.
+function podarAutoIpsExpirados() {
+  let dados;
+  try {
+    dados = loadWhitelist();
+  } catch {
+    return;
+  }
+  const agora = Date.now();
+  const vivas = dados.autoAllowedIps.filter((entrada) => entrada.expiraEm > agora);
+  if (vivas.length === dados.autoAllowedIps.length) return;
+
+  dados.autoAllowedIps = vivas;
+  try {
+    salvarWhitelist(dados);
+    console.log('[WHITELIST AUTO] entradas expiradas removidas de config/whitelist.json');
+  } catch (err) {
+    console.error('[WHITELIST AUTO] falha ao podar expirados:', err.message);
+  }
+}
+
 function normalizarIp(ip) {
   // Remove o prefixo IPv4-mapped-IPv6 (::ffff:) que o Node adiciona às vezes.
   return (ip || '').replace('::ffff:', '');
@@ -149,3 +175,4 @@ module.exports = checarWhitelist;
 // mesmo IP que a whitelist — mesma lógica de proxy confiável — pra vincular
 // o token ao IP sem divergência entre as duas camadas.
 module.exports.getClientIp = getClientIp;
+module.exports.podarAutoIpsExpirados = podarAutoIpsExpirados;
