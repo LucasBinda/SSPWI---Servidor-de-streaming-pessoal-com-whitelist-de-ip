@@ -146,6 +146,25 @@ function tituloAPartirDoNome(relPath) {
     .trim();
 }
 
+const COVERS_DIR = path.join(__dirname, '..', 'media', 'covers');
+
+// Anexa a versão (mtime) às capas locais na RESPOSTA da API — a URL muda
+// junto com o arquivo, então o navegador nunca mostra capa velha de cache.
+// Importa principalmente com trocarCapasAutoNoCatalogo ligado: a capa é
+// substituída em disco mantendo o mesmo nome, e sem isso a URL idêntica
+// deixaria o navegador reaproveitar a imagem anterior. O catalog.json em
+// si guarda a URL limpa; a versão só existe na resposta.
+function capaComVersao(capa) {
+  if (!capa || !capa.startsWith('/covers/')) return capa || '';
+  const abs = path.normalize(path.join(COVERS_DIR, capa.replace('/covers/', '')));
+  if (!abs.startsWith(COVERS_DIR + path.sep)) return capa;
+  try {
+    return `${capa}?v=${Math.floor(fs.statSync(abs).mtimeMs)}`;
+  } catch {
+    return capa;
+  }
+}
+
 // GET /api/movies -> monta o catálogo escaneando media/movies/ (incluindo
 // subpastas) e aplicando eventuais overrides de data/catalog.json
 function handleMoviesApi(req, res) {
@@ -173,7 +192,7 @@ function handleMoviesApi(req, res) {
         id: override.id || relPath,
         titulo: override.titulo || tituloAPartirDoNome(relPath),
         descricao: override.descricao || '',
-        capa: override.capa || '',
+        capa: capaComVersao(override.capa),
         arquivo: relPath,
       };
     });
