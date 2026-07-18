@@ -5,5 +5,5 @@
   "reencodeCodec": "libx265",
   "reencodePreset": "fast",
   "reencodeCrf": 26,
-  "trocarCapasAutoNoCatalogo": true
+  "trocarCapasAutoNoCatalogo": false
 }

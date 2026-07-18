@@ -1,4 +1,5 @@
 const http = require('http');
+const os = require('os');
 const path = require('path');
 
 const checarWhitelist = require('./middleware/ipWhitelist');
@@ -124,7 +125,17 @@ server.listen(PORT, () => {
   console.log(`Servidor de streaming rodando na porta ${PORT}`);
   console.log(`Acesse via http://<ip-do-servidor>:${PORT}`);
 
-  // Fase 2: limpa temporários de conversões interrompidas e enfileira
+  // Endereços reais desta máquina, um por família, pra copiar e colar
+  // direto no navegador. Link-local IPv6 (fe80::) fica de fora: não é
+  // acessível de outra rede e exigiria zone-id na URL. IPv6 vai entre
+  // colchetes — é a sintaxe obrigatória de URL pra essa família.
+  const interfaces = Object.values(os.networkInterfaces()).flat();
+  const ipv4 = interfaces.find((i) => i && !i.internal && i.family === 'IPv4');
+  const ipv6 = interfaces.find((i) => i && !i.internal && i.family === 'IPv6' && !i.address.startsWith('fe80'));
+  if (ipv4) console.log(`IPv4: http://${ipv4.address}:${PORT}`);
+  if (ipv6) console.log(`IPv6: http://[${ipv6.address}]:${PORT}`);
+
+  // limpa temporários de conversões interrompidas e enfileira
   // qualquer não-mp4 já presente no acervo (vídeos adicionados enquanto o
   // servidor estava desligado). Novos arquivos detectados em runtime são
   // enfileirados pelo /api/movies (routes/movies.js).
@@ -132,7 +143,7 @@ server.listen(PORT, () => {
   const arquivos = scanMoviesDir(MOVIES_DIR);
   enfileirarNaoMp4(arquivos);
 
-  // Fase 4: sincroniza o catálogo já no boot (sem esperar a primeira
+  // sincroniza o catálogo já no boot (sem esperar a primeira
   // visita) e gera capa pra quem não tem — ou pra quem referencia uma capa
   // local que não existe mais em disco.
   coverPicker.garantirCapas(sincronizarCatalogo(arquivos));
