@@ -35,7 +35,8 @@ config/whitelist.json
 # do worker de conversão pra mp4 (cache/reencode/).
 cache/
 
-# Logs
+# Logs — inclui logs/ gerado pelo LogManager (conexões etc.)
+logs/
 *.log
 npm-debug.log*
 

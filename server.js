@@ -4,6 +4,8 @@ const path = require('path');
 
 const checarWhitelist = require('./middleware/ipWhitelist');
 const { handleAuthSession, checarSessao } = require('./middleware/sessionCookie');
+const { logManager } = require('./lib/logManager');
+const { loadSettings } = require('./lib/settings');
 const { handleMoviesApi, handleStream, scanMoviesDir, sincronizarCatalogo, MOVIES_DIR } = require('./routes/movies');
 const { handleMediaTracks, handleMediaSubtitle } = require('./routes/media');
 const { handleWatchTimeGet, handleWatchTimeSave } = require('./routes/watchTime');
@@ -22,6 +24,14 @@ const server = http.createServer((req, res) => {
   if (!checarWhitelist(req, res)) {
     return;
   }
+
+  // Conexão autorizada -> "Horario - ip" em logs/conexoes.log. Usa o MESMO
+  // getClientIp da whitelist (respeita proxies confiáveis), e o LogManager
+  // deduplica por IP numa janela de 30min — sem isso, cada carregamento de
+  // página viraria meia dúzia de linhas idênticas. O IP fica guardado pra
+  // ser reaproveitado pelo log de chamadas nas rotas de conteúdo abaixo.
+  const clientIp = checarWhitelist.getClientIp(req, loadSettings().proxiesConfiaveis);
+  logManager.registrarConexao(clientIp);
 
   // API WHATWG URL (new URL / URLSearchParams) no lugar do antigo
   // url.parse(): o próprio Node.js avisa (DEP0169) que url.parse() tem
@@ -80,6 +90,9 @@ const server = http.createServer((req, res) => {
 
   // API do catálogo
   if (pathname === '/api/movies') {
+    // "Horario - ip - chamada" em logs/chamadas.log (deduplicado por
+    // IP+chamada no LogManager — mesmo esquema pro filme e legenda abaixo).
+    logManager.registrarChamada(clientIp, 'catálogo');
     return handleMoviesApi(req, res);
   }
 
@@ -87,6 +100,7 @@ const server = http.createServer((req, res) => {
   // decodificado pela própria API URL — sem decode manual aqui também.
   if (pathname === '/stream') {
     const query = Object.fromEntries(parsedUrl.searchParams);
+    if (query.arquivo) logManager.registrarChamada(clientIp, `filme: ${query.arquivo}`);
     return handleStream(req, res, query);
   }
 
@@ -100,6 +114,7 @@ const server = http.createServer((req, res) => {
   }
   if (pathname === '/media/subtitle') {
     const query = Object.fromEntries(parsedUrl.searchParams);
+    if (query.arquivo) logManager.registrarChamada(clientIp, `legenda: ${query.arquivo}`);
     return handleMediaSubtitle(req, res, query);
   }
 
