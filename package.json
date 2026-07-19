@@ -3,6 +3,7 @@
   "version": "2.0.0",
   "description": "Servidor pessoal de streaming de filmes com whitelist de IP, sem dependências de terceiros (só módulos nativos do Node.js)",
   "main": "server.js",
+  "author": "LucasBinda (https://github.com/LucasBinda)",
   "scripts": {
     "start": "node server.js"
   },
