@@ -188,7 +188,7 @@ main {
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease;
+  transition: border-color 0.15s ease, color 0.15s ease, opacity 0.25s ease;
 }
 
 .btn-config:hover,
@@ -197,12 +197,21 @@ main {
   color: var(--accent);
 }
 
+/* Sem atividade, a engrenagem some junto com a barra de controles nativa
+   pra não ficar na frente do filme (classe controlada pelo player.js) */
+.video-shell.controles-ocultos .btn-config {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .painel-config {
   position: absolute;
   top: 54px;
   right: 12px;
   width: 260px;
   max-width: calc(100% - 24px);
+  max-height: calc(100% - 66px);
+  overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -223,7 +232,8 @@ main {
   border-top: 1px solid var(--border);
 }
 
-.painel-secao label {
+.painel-secao label,
+.painel-secao .rotulo-secao {
   font-size: 12px;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -244,7 +254,13 @@ main {
   opacity: 0.5;
 }
 
-.btn-toggle-eq {
+.linha-botoes {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-painel {
+  flex: 1;
   background: var(--surface-hover);
   color: var(--text-primary);
   border: 1px solid var(--border);
@@ -253,12 +269,68 @@ main {
   font-size: 13px;
   font-family: inherit;
   cursor: pointer;
-  text-align: left;
+  text-align: center;
 }
 
-.btn-toggle-eq:hover,
-.btn-toggle-eq:focus-visible {
+.btn-painel:hover,
+.btn-painel:focus-visible {
   border-color: var(--accent);
+}
+
+.btn-painel[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Interruptor (checkbox estilizado) que liga/desliga o equalizador */
+.linha-toggle {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+input.switch {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 40px;
+  height: 22px;
+  margin: 0;
+  flex-shrink: 0;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: var(--surface-hover);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+input.switch::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+input.switch:checked {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+input.switch:checked::before {
+  transform: translateX(18px);
+  background: var(--accent);
+}
+
+input.switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .painel-equalizador {
@@ -298,6 +370,55 @@ main {
   font-size: 11px;
   color: var(--text-secondary);
   text-align: right;
+}
+
+/* Legenda desenhada pelo player (substitui a <track> nativa — ver player.js) */
+.legenda-overlay {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 9%;
+  max-width: 86%;
+  padding: 4px 14px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: clamp(15px, 2.4vw, 28px);
+  line-height: 1.35;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+
+.legenda-overlay[hidden] {
+  display: none;
+}
+
+/* Modo retrato: o filme toma a janela inteira do navegador (sem fullscreen
+   do sistema). O shell vira uma camada fixa sobre a página; Esc sai. */
+body.modo-retrato {
+  overflow: hidden;
+}
+
+body.modo-retrato .video-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: #000;
+}
+
+/* Tela cheia de verdade é pedida no .video-shell (não no <video>), pra
+   legenda e engrenagem continuarem por cima — mesmas regras de layout. */
+.video-shell:fullscreen {
+  background: #000;
+}
+
+body.modo-retrato .video-shell video,
+.video-shell:fullscreen video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 0;
 }
 
 .player-wrap h1 {

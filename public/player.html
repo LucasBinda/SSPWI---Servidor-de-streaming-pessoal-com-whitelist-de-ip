@@ -15,11 +15,24 @@
 
   <div class="player-wrap">
     <div class="video-shell">
-      <video id="video-player" controls autoplay></video>
+      <!-- nofullscreen: o botão nativo só amplia o <video>, o que esconderia a
+           legenda desenhada pelo player (camada .legenda-overlay). A tela cheia
+           de verdade fica no painel de configurações, ampliando o shell inteiro. -->
+      <video id="video-player" controls autoplay controlslist="nofullscreen"></video>
+
+      <div id="legenda-overlay" class="legenda-overlay" hidden></div>
 
       <button id="btn-config" class="btn-config" type="button" aria-label="Configurações do player" aria-expanded="false">⚙</button>
 
       <div id="painel-config" class="painel-config" hidden>
+        <div class="painel-secao">
+          <span class="rotulo-secao">Tela</span>
+          <div class="linha-botoes">
+            <button id="btn-modo-retrato" type="button" class="btn-painel" aria-pressed="false" title="O filme ocupa a janela inteira do navegador (Esc sai)">Modo retrato</button>
+            <button id="btn-tela-cheia" type="button" class="btn-painel" title="Tela cheia (Esc sai)">Tela cheia</button>
+          </div>
+        </div>
+
         <div class="painel-secao">
           <label for="select-audio">Áudio</label>
           <select id="select-audio"></select>
@@ -33,7 +46,10 @@
         </div>
 
         <div class="painel-secao">
-          <button id="btn-equalizador" type="button" class="btn-toggle-eq" aria-expanded="false">Equalizador de áudio</button>
+          <div class="linha-toggle">
+            <label for="toggle-equalizador">Equalizador de áudio</label>
+            <input type="checkbox" id="toggle-equalizador" class="switch" role="switch">
+          </div>
           <div id="painel-equalizador" class="painel-equalizador" hidden></div>
         </div>
       </div>

@@ -50,6 +50,8 @@ function iniciarPlayer(arquivo) {
   });
 
   configurarPainelConfiguracoes({ arquivo, video });
+  configurarOcultarConfigOcioso(video);
+  configurarModosDeTela(video);
   configurarEqualizador(video);
   configurarWatchTime(arquivo, video);
 
@@ -134,13 +136,18 @@ function rotuloFaixa(faixa, tipo) {
 }
 
 // Botão de engrenagem: abre/fecha o painel e liga o seletor de legenda.
-// Legenda é extraída à parte via /media/subtitle (operação leve, com cache)
-// e entra como uma <track> nativa do <video> — trocar de legenda nunca
-// interrompe o vídeo que já está tocando.
+// Legenda é extraída à parte via /media/subtitle (operação leve, com cache),
+// mas NÃO entra como <track> nativa: o navegador cria sozinho um botão "CC"
+// na barra de controles quando existe uma faixa de texto, e não há CSS
+// confiável pra escondê-lo no Chrome. Em vez disso o próprio player baixa o
+// WebVTT, interpreta as cues e desenha a legenda numa camada sobre o vídeo
+// (.legenda-overlay) — mesma função, barra limpa. Trocar de legenda continua
+// sem interromper o vídeo que já está tocando.
 function configurarPainelConfiguracoes({ arquivo, video }) {
   const btnConfig = document.getElementById('btn-config');
   const painel = document.getElementById('painel-config');
   const selectLegenda = document.getElementById('select-legenda');
+  const overlay = document.getElementById('legenda-overlay');
 
   btnConfig.addEventListener('click', () => {
     const estaAberto = !painel.hidden;
@@ -148,29 +155,180 @@ function configurarPainelConfiguracoes({ arquivo, video }) {
     btnConfig.setAttribute('aria-expanded', String(!estaAberto));
   });
 
-  let trackEl = null;
+  let cues = [];
+  let ultimoHtml = '';
+
+  // Redesenha só quando o conjunto de cues visíveis muda — o timeupdate
+  // dispara ~4x por segundo e mexer no DOM à toa não faz sentido.
+  function atualizarLegenda() {
+    const t = video.currentTime;
+    const html = cues
+      .filter((cue) => t >= cue.inicio && t <= cue.fim)
+      .map((cue) => cue.html)
+      .join('<br>');
+    if (html === ultimoHtml) return;
+    ultimoHtml = html;
+    overlay.innerHTML = html;
+    overlay.hidden = html === '';
+  }
+  video.addEventListener('timeupdate', atualizarLegenda);
+  video.addEventListener('seeked', atualizarLegenda);
+
   selectLegenda.addEventListener('change', () => {
-    if (trackEl) {
-      video.removeChild(trackEl);
-      trackEl = null;
-    }
+    cues = [];
+    ultimoHtml = '';
+    overlay.innerHTML = '';
+    overlay.hidden = true;
 
     const subIndex = selectLegenda.value;
     if (subIndex === '') return;
 
-    trackEl = document.createElement('track');
-    trackEl.kind = 'subtitles';
-    trackEl.label = selectLegenda.selectedOptions[0].textContent;
-    trackEl.src = `/media/subtitle?arquivo=${encodeURIComponent(arquivo)}&sub=${encodeURIComponent(subIndex)}`;
-    trackEl.default = true;
-    video.appendChild(trackEl);
+    fetch(`/media/subtitle?arquivo=${encodeURIComponent(arquivo)}&sub=${encodeURIComponent(subIndex)}`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.text();
+      })
+      .then((vtt) => {
+        cues = parseWebVTT(vtt);
+        atualizarLegenda();
+      })
+      .catch((err) => console.error('[player] falha ao carregar legenda:', err));
+  });
+}
 
-    // Adicionar <track> depois que o vídeo já está tocando nem sempre ativa
-    // sozinho em todo navegador — força o modo "showing" quando o WebVTT
-    // termina de carregar.
-    trackEl.addEventListener('load', () => {
-      if (trackEl.track) trackEl.track.mode = 'showing';
-    });
+// Parser de WebVTT mínimo: só o que o /media/subtitle gera (blocos de cue
+// separados por linha em branco, timestamps "HH:MM:SS.mmm --> HH:MM:SS.mmm").
+// Posicionamento avançado de cue (align, line etc.) é ignorado — a legenda
+// sempre aparece centralizada no rodapé do vídeo.
+function parseWebVTT(texto) {
+  const cues = [];
+  const blocos = texto.replace(/\r/g, '').split(/\n\n+/);
+
+  for (const bloco of blocos) {
+    const linhas = bloco.split('\n').filter((l) => l.trim() !== '');
+    const idxTempo = linhas.findIndex((l) => l.includes('-->'));
+    if (idxTempo === -1) continue;
+
+    const [inicioBruto, fimBruto] = linhas[idxTempo].split('-->');
+    const inicio = parseTempoVTT(inicioBruto);
+    const fim = parseTempoVTT(fimBruto);
+    if (inicio === null || fim === null) continue;
+
+    const corpo = linhas.slice(idxTempo + 1).join('\n');
+    if (corpo === '') continue;
+    cues.push({ inicio, fim, html: cueParaHtml(corpo) });
+  }
+  return cues;
+}
+
+// "01:02:03.456" ou "02:03.456" -> segundos (a hora é opcional no WebVTT).
+function parseTempoVTT(bruto) {
+  const m = bruto.trim().match(/^(?:(\d+):)?(\d{1,2}):(\d{2})[.,](\d{3})/);
+  if (!m) return null;
+  return Number(m[1] || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]) + Number(m[4]) / 1000;
+}
+
+// O texto da cue vai pro innerHTML do overlay, então tudo é escapado primeiro
+// e só itálico/negrito/sublinhado (formatação comum em legendas) volta a ser
+// tag de verdade. O resto das tags de VTT (<v>, <c>, timestamps) é descartado.
+function cueParaHtml(texto) {
+  return texto
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/&lt;(\/?)(i|b|u)&gt;/gi, '<$1$2>')
+    .replace(/&lt;\/?[^&]*?&gt;/g, '')
+    .replace(/\n/g, '<br>');
+}
+
+// A engrenagem acompanha a barra de controles nativa: some depois de ~3s sem
+// atividade com o vídeo tocando (mesmo timeout do Chrome) pra não ficar na
+// frente do filme, e reaparece ao mexer o mouse ou tocar na tela. Nunca some
+// com o vídeo pausado (a barra nativa também não some) nem com o painel de
+// configurações aberto.
+function configurarOcultarConfigOcioso(video) {
+  const shell = document.querySelector('.video-shell');
+  const painel = document.getElementById('painel-config');
+  const OCIOSO_MS = 3000;
+  let timer = null;
+
+  function esconder() {
+    if (video.paused || !painel.hidden) return;
+    shell.classList.add('controles-ocultos');
+  }
+
+  function mostrar() {
+    shell.classList.remove('controles-ocultos');
+    clearTimeout(timer);
+    timer = setTimeout(esconder, OCIOSO_MS);
+  }
+
+  shell.addEventListener('pointermove', mostrar);
+  shell.addEventListener('pointerdown', mostrar);
+  shell.addEventListener('focusin', mostrar);
+  // Cursor saiu do vídeo: esconde já, sem esperar o timeout
+  shell.addEventListener('pointerleave', () => {
+    clearTimeout(timer);
+    esconder();
+  });
+  video.addEventListener('pause', mostrar);
+  // O play (inclusive o autoplay) arma a contagem — sem isso a engrenagem
+  // ficaria pra sempre na tela se o mouse nunca passasse pelo vídeo.
+  video.addEventListener('play', mostrar);
+}
+
+// Modo retrato: o filme ocupa a janela inteira do navegador (sem virar tela
+// cheia do sistema — a aba e a barra do navegador continuam lá). Tela cheia:
+// fullscreen de verdade, mas pedido no .video-shell em vez do <video>, pra
+// legenda desenhada e a engrenagem continuarem visíveis por cima do filme.
+function configurarModosDeTela(video) {
+  const shell = document.querySelector('.video-shell');
+  const btnRetrato = document.getElementById('btn-modo-retrato');
+  const btnTelaCheia = document.getElementById('btn-tela-cheia');
+
+  function definirRetrato(ligado) {
+    document.body.classList.toggle('modo-retrato', ligado);
+    btnRetrato.setAttribute('aria-pressed', String(ligado));
+    btnRetrato.textContent = ligado ? 'Sair do retrato' : 'Modo retrato';
+  }
+
+  btnRetrato.addEventListener('click', () => {
+    definirRetrato(!document.body.classList.contains('modo-retrato'));
+  });
+
+  // Esc sai do modo retrato — mas não quando a tela cheia está ativa, senão
+  // um único Esc derrubaria os dois modos de uma vez (o navegador já usa
+  // Esc pra sair do fullscreen).
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (document.fullscreenElement) return;
+    if (document.body.classList.contains('modo-retrato')) definirRetrato(false);
+  });
+
+  function alternarTelaCheia() {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else if (shell.requestFullscreen) {
+      shell.requestFullscreen().catch((err) => {
+        console.error('[player] tela cheia negada pelo navegador:', err);
+      });
+    } else if (shell.webkitRequestFullscreen) {
+      shell.webkitRequestFullscreen(); // Safari antigo
+    }
+  }
+
+  btnTelaCheia.addEventListener('click', alternarTelaCheia);
+  document.addEventListener('fullscreenchange', () => {
+    btnTelaCheia.textContent = document.fullscreenElement ? 'Sair da tela cheia' : 'Tela cheia';
+  });
+
+  // Clique duplo no vídeo alterna a tela cheia (o atalho nativo se perdeu
+  // junto com o controlslist="nofullscreen"). A faixa final é ignorada:
+  // dois cliques rápidos na barra de controles (volume, seek) não devem
+  // jogar o player em fullscreen.
+  video.addEventListener('dblclick', (e) => {
+    if (e.offsetY > video.clientHeight - 64) return;
+    alternarTelaCheia();
   });
 }
 
@@ -222,32 +380,86 @@ function preencherFaixas(tracks, video) {
   });
 }
 
-// Equalizador via Web Audio API. O AudioContext só pode ser criado (ou
-// retomado, se suspenso) a partir de um gesto do usuário — política de
-// autoplay dos navegadores — então todo o grafo de áudio é montado de
-// forma preguiçosa, só no primeiro clique em "Equalizador".
+// Equalizador via Web Audio API, ligado/desligado pelo interruptor ao lado
+// do texto "Equalizador de áudio". createMediaElementSource é permanente
+// (não existe "desfazer" — todo o áudio do <video> passa a sair pelo grafo),
+// então desligar não desmonta nada: o source é religado direto no destino,
+// num bypass real que tira compressor e filtros do caminho do som.
+// O AudioContext só pode ser criado/retomado a partir de um gesto do usuário
+// (política de autoplay), por isso o grafo é montado preguiçosamente.
+// Estado (ligado + ganhos por banda) persiste no localStorage do navegador.
 function configurarEqualizador(video) {
-  const btnEq = document.getElementById('btn-equalizador');
+  const toggleEq = document.getElementById('toggle-equalizador');
   const painelEq = document.getElementById('painel-equalizador');
 
   const BANDAS_HZ = [60, 170, 350, 1000, 3500, 10000];
+  const CHAVE_STORAGE = 'sspwi-equalizador';
+
   let audioCtx = null;
+  let source = null;
+  let entradaCadeia = null; // primeiro nó da cadeia (compressor) — alvo do religa
+  const filtros = [];
+
+  let estado = { ligado: false, ganhos: BANDAS_HZ.map(() => 0) };
+  try {
+    const salvo = JSON.parse(localStorage.getItem(CHAVE_STORAGE));
+    if (salvo && Array.isArray(salvo.ganhos) && salvo.ganhos.length === BANDAS_HZ.length) {
+      estado = { ligado: Boolean(salvo.ligado), ganhos: salvo.ganhos.map(Number) };
+    }
+  } catch {
+    /* JSON corrompido no storage — segue com o padrão neutro */
+  }
+  const salvarEstado = () => localStorage.setItem(CHAVE_STORAGE, JSON.stringify(estado));
+
+  // Os sliders de banda existem desde a carga da página (mostrando os ganhos
+  // salvos), independente do grafo de áudio — que pode nem ter sido montado
+  // ainda. Mexer num slider guarda o ganho e, se o grafo existir, aplica.
+  BANDAS_HZ.forEach((freq, i) => {
+    const linha = document.createElement('div');
+    linha.className = 'linha-eq';
+
+    const rotulo = document.createElement('label');
+    rotulo.className = 'rotulo-eq';
+    rotulo.textContent = freq >= 1000 ? `${freq / 1000}kHz` : `${freq}Hz`;
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = '-12';
+    slider.max = '12';
+    slider.step = '1';
+    slider.value = String(estado.ganhos[i]);
+    slider.className = 'slider-eq';
+    slider.setAttribute('aria-label', `Ganho em ${rotulo.textContent}`);
+
+    const valor = document.createElement('span');
+    valor.className = 'valor-eq';
+
+    const formatar = (db) => `${db > 0 ? '+' : ''}${db}dB`;
+    valor.textContent = formatar(estado.ganhos[i]);
+
+    slider.addEventListener('input', () => {
+      const db = Number(slider.value);
+      estado.ganhos[i] = db;
+      if (filtros[i]) filtros[i].gain.value = db;
+      valor.textContent = formatar(db);
+      salvarEstado();
+    });
+
+    linha.appendChild(rotulo);
+    linha.appendChild(slider);
+    linha.appendChild(valor);
+    painelEq.appendChild(linha);
+  });
 
   function montarGrafoDeAudio() {
     if (audioCtx) return;
 
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    source = audioCtx.createMediaElementSource(video);
 
-    // createMediaElementSource só pode ser chamado UMA vez por elemento, e
-    // a partir daí TODO o áudio do <video> passa a sair pelo grafo do Web
-    // Audio API — por isso a cadeia precisa terminar em audioCtx.destination,
-    // senão o áudio simplesmente emudece.
-    const source = audioCtx.createMediaElementSource(video);
-
-    // Nivelamento automático de volume, ligado por padrão (trecho muito
-    // alto abaixa um pouco, trecho muito baixo sobe um pouco). Isso é
-    // dinâmica de AMPLITUDE — não tem relação com as bandas de frequência
-    // abaixo, que continuam neutras (0dB) até o usuário mexer.
+    // Nivelamento automático de volume (trecho muito alto abaixa um pouco,
+    // trecho muito baixo sobe um pouco). Isso é dinâmica de AMPLITUDE — não
+    // tem relação com as bandas de frequência, que aplicam os ganhos salvos.
     // threshold/ratio moderados (não é um limiter agressivo) + um pequeno
     // ganho de compensação depois, pra recuperar o volume médio que a
     // compressão tira.
@@ -261,59 +473,59 @@ function configurarEqualizador(video) {
     const ganhoCompensacao = audioCtx.createGain();
     ganhoCompensacao.gain.value = 1.4; // ~+3dB, compensa a redução média da compressão
 
-    source.connect(compressor);
-    let node = ganhoCompensacao;
+    entradaCadeia = compressor;
     compressor.connect(ganhoCompensacao);
 
-    BANDAS_HZ.forEach((freq) => {
+    let node = ganhoCompensacao;
+    BANDAS_HZ.forEach((freq, i) => {
       const filtro = audioCtx.createBiquadFilter();
       filtro.type = 'peaking';
       filtro.frequency.value = freq;
       filtro.Q.value = 1;
-      filtro.gain.value = 0;
+      filtro.gain.value = estado.ganhos[i];
       node.connect(filtro);
       node = filtro;
-
-      const linha = document.createElement('div');
-      linha.className = 'linha-eq';
-
-      const rotulo = document.createElement('label');
-      rotulo.className = 'rotulo-eq';
-      rotulo.textContent = freq >= 1000 ? `${freq / 1000}kHz` : `${freq}Hz`;
-
-      const slider = document.createElement('input');
-      slider.type = 'range';
-      slider.min = '-12';
-      slider.max = '12';
-      slider.step = '1';
-      slider.value = '0';
-      slider.className = 'slider-eq';
-      slider.setAttribute('aria-label', `Ganho em ${rotulo.textContent}`);
-
-      const valor = document.createElement('span');
-      valor.className = 'valor-eq';
-      valor.textContent = '0dB';
-
-      slider.addEventListener('input', () => {
-        const db = Number(slider.value);
-        filtro.gain.value = db;
-        valor.textContent = `${db > 0 ? '+' : ''}${db}dB`;
-      });
-
-      linha.appendChild(rotulo);
-      linha.appendChild(slider);
-      linha.appendChild(valor);
-      painelEq.appendChild(linha);
+      filtros[i] = filtro;
     });
     node.connect(audioCtx.destination);
   }
 
-  btnEq.addEventListener('click', () => {
+  function ligar() {
     montarGrafoDeAudio();
     if (audioCtx.state === 'suspended') audioCtx.resume();
+    source.disconnect();
+    source.connect(entradaCadeia);
+    painelEq.hidden = false;
+  }
 
-    const estaAberto = !painelEq.hidden;
-    painelEq.hidden = estaAberto;
-    btnEq.setAttribute('aria-expanded', String(!estaAberto));
+  function desligar() {
+    // Bypass: som segue direto pro destino, sem compressor nem filtros.
+    // (Se o grafo nunca foi montado, o áudio nem saiu do caminho nativo.)
+    if (source) {
+      source.disconnect();
+      source.connect(audioCtx.destination);
+    }
+    painelEq.hidden = true;
+  }
+
+  toggleEq.addEventListener('change', () => {
+    estado.ligado = toggleEq.checked;
+    salvarEstado();
+    if (toggleEq.checked) ligar();
+    else desligar();
   });
+
+  // Sessão anterior deixou o equalizador ligado: o interruptor e os sliders
+  // já aparecem ativos, mas o AudioContext precisa de um gesto — o grafo
+  // engata no primeiro clique/tecla (até lá o vídeo toca pelo caminho
+  // nativo, sem processamento, o que é inaudível na prática).
+  if (estado.ligado) {
+    toggleEq.checked = true;
+    painelEq.hidden = false;
+    const engatar = () => {
+      if (toggleEq.checked && !audioCtx) ligar();
+    };
+    document.addEventListener('pointerdown', engatar, { once: true });
+    document.addEventListener('keydown', engatar, { once: true });
+  }
 }
