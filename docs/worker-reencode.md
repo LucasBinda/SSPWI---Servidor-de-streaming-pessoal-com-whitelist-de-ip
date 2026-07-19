@@ -21,9 +21,9 @@ media/movies/ ganha um arquivo não-.mp4
               ┌───────────────────────────────┴──────────────────────┐
               ▼                                                      ▼
    vídeo já HEVC/AV1?                                     vídeo h264/mpeg4/etc?
-   -c:v copy (remux,                                      -c:v libx265 crf 26
-   segundos, sem perda)                                   (re-encode, lento,
-              │                                           poupa disco)
+   -c:v copy (remux,                                      re-encode: prova de
+   segundos, sem perda)                                   velocidade (30s) decide
+              │                                           CPU (x265) ou GPU (nvenc)
               └───────────────────────────────┬──────────────────────┘
                                               ▼
                       áudio: aac -> copy; ac3/dts/... -> aac 256k
@@ -49,6 +49,7 @@ media/movies/ ganha um arquivo não-.mp4
 | Fila serial (1 job por vez) | Encode é a operação mais pesada do servidor; paralelismo só criaria disputa de CPU |
 | `nice -n 19` | Quem está assistindo nunca perde CPU pro worker — ele usa a sobra |
 | Copy quando a fonte já é HEVC/AV1 | Remux é ~grátis e sem perda; re-encodar HEVC de novo só degradaria qualidade |
+| Prova de velocidade antes do re-encode | Cada modo (CPU e, com GPU NVIDIA, NVENC/NVDEC) converte a origem por até 30s (ou 50% do filme); o mais rápido faz a conversão completa. Modo que falha sai da disputa — é também a detecção automática de hardware, sem chave de configuração |
 | Original apagado só após verificação | Falha em qualquer passo preserva o arquivo original intocado |
 | Sem retry automático de falhas | Evita loop queimando CPU numa conversão que sempre falha; apague a entrada em `data/reencode-state.json` pra tentar de novo |
 | `-tag:v hvc1` | Sem essa tag, Safari/dispositivos Apple não reconhecem HEVC dentro de mp4 |
@@ -60,9 +61,28 @@ media/movies/ ganha um arquivo não-.mp4
 | Chave | Padrão | Efeito |
 |-------|--------|--------|
 | `reencodeAtivo` | `true` | Liga/desliga o worker (lido a cada enfileiramento, sem restart) |
-| `reencodeCodec` | `"libx265"` | Codec de vídeo quando re-encode é necessário (`libsvtav1` também disponível) |
+| `reencodeCodec` | `"libx265"` | Codec do modo CPU da prova de velocidade (`libsvtav1` também disponível) |
 | `reencodePreset` | `"fast"` | Velocidade vs. eficiência de compressão |
 | `reencodeCrf` | `26` | Qualidade (menor = melhor qualidade e arquivo maior) |
+
+### Prova de velocidade e encoder de hardware (NVENC)
+
+Quando o vídeo precisa de re-encode de verdade, o worker não assume qual
+caminho é o mais rápido: disputam uma prova o codec configurado rodando no
+CPU e, quando há GPU NVIDIA com driver funcionando, `hevc_nvenc` (encode na
+GPU) e `hevc_nvenc` + NVDEC (decode também na GPU). Cada candidato converte
+a mesma origem por até 30 segundos — ou até 50% do filme, o que vier
+primeiro — com a saída descartada (`-f null`); vence quem sustentou a maior
+velocidade média, e só o vencedor converte o arquivo inteiro. Candidato que
+falha (máquina sem NVIDIA, codec sem suporte no NVDEC) tira nota zero e sai
+da disputa: a prova é também a detecção automática de hardware, e em
+máquinas sem GPU o custo dela é ~zero (os modos nvenc falham na hora).
+
+No NVENC, o `reencodeCrf` é aplicado como `-cq` (mesma escala) e presets do
+x26x são traduzidos para `p1`-`p7`. A compressão do NVENC é pior que a do
+libx265 — arquivos ~1,3-1,8x maiores na mesma qualidade percebida — mas a
+conversão é ~10x mais rápida e quase não usa CPU; suba o `reencodeCrf` se o
+tamanho pesar mais que a qualidade.
 
 ## Estado
 
