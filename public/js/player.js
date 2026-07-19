@@ -52,6 +52,7 @@ function iniciarPlayer(arquivo) {
   configurarPainelConfiguracoes({ arquivo, video });
   configurarOcultarConfigOcioso(video);
   configurarModosDeTela(video);
+  configurarAjusteDeImagem();
   configurarEqualizador(video);
   configurarWatchTime(arquivo, video);
 
@@ -377,6 +378,36 @@ function preencherFaixas(tracks, video) {
     opt.value = String(faixa.index);
     opt.textContent = rotuloFaixa(faixa, 'legenda');
     selectLegenda.appendChild(opt);
+  });
+}
+
+// Ajuste de imagem quando o filme ocupa a tela (modo retrato/tela cheia):
+// Original mantém a imagem fiel (bordas pretas se a proporção não bater),
+// Preencher amplia cortando as beiradas e Esticar deforma até ocupar tudo.
+// No layout normal da página não tem efeito — ali a altura do player já
+// acompanha a proporção do arquivo. A escolha persiste no localStorage.
+function configurarAjusteDeImagem() {
+  const CHAVE_STORAGE = 'sspwi-ajuste-imagem';
+  const AJUSTES = ['original', 'preencher', 'esticar'];
+  const botoes = Array.from(document.querySelectorAll('.btn-ajuste'));
+
+  function aplicar(ajuste) {
+    document.body.classList.toggle('ajuste-preencher', ajuste === 'preencher');
+    document.body.classList.toggle('ajuste-esticar', ajuste === 'esticar');
+    botoes.forEach((btn) => {
+      btn.setAttribute('aria-pressed', String(btn.dataset.ajuste === ajuste));
+    });
+  }
+
+  let salvo = localStorage.getItem(CHAVE_STORAGE);
+  if (!AJUSTES.includes(salvo)) salvo = 'original';
+  aplicar(salvo);
+
+  botoes.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      aplicar(btn.dataset.ajuste);
+      localStorage.setItem(CHAVE_STORAGE, btn.dataset.ajuste);
+    });
   });
 }
 

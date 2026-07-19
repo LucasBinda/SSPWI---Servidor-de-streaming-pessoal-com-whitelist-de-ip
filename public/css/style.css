@@ -282,6 +282,12 @@ main {
   color: var(--accent);
 }
 
+/* Três opções lado a lado no painel de 260px — texto mais compacto */
+.btn-ajuste {
+  font-size: 12px;
+  padding: 8px 4px;
+}
+
 /* Interruptor (checkbox estilizado) que liga/desliga o equalizador */
 .linha-toggle {
   display: flex;
@@ -419,6 +425,18 @@ body.modo-retrato .video-shell video,
   height: 100%;
   object-fit: contain;
   border-radius: 0;
+}
+
+/* Ajuste de imagem (só age quando o filme ocupa a tela): Preencher corta as
+   beiradas pra eliminar as bordas pretas, Esticar deforma a proporção. */
+body.modo-retrato.ajuste-preencher .video-shell video,
+body.ajuste-preencher .video-shell:fullscreen video {
+  object-fit: cover;
+}
+
+body.modo-retrato.ajuste-esticar .video-shell video,
+body.ajuste-esticar .video-shell:fullscreen video {
+  object-fit: fill;
 }
 
 .player-wrap h1 {
