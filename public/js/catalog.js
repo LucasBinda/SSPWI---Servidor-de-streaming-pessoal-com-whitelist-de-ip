@@ -40,16 +40,33 @@ async function carregarCatalogo() {
       card.setAttribute('role', 'button');
       card.setAttribute('aria-label', `Assistir ${filme.titulo}`);
 
-      card.innerHTML = `
-        <div class="card-sprockets" aria-hidden="true">
-          <span></span><span></span><span></span><span></span><span></span><span></span>
-        </div>
-        <img src="${filme.capa}" alt="Capa de ${filme.titulo}" onerror="this.style.display='none'">
-        <div class="card-body">
-          <h3>${filme.titulo}</h3>
-          <p>${filme.descricao || ''}</p>
-        </div>
-      `;
+      // Montagem via DOM (createElement + textContent), NUNCA innerHTML com
+      // interpolação: título/descrição vêm do NOME DO ARQUIVO em disco e do
+      // catalog.json — conteúdo arbitrário. Um filme chamado
+      // "<img src=x onerror=...>.mp4" viraria injeção de script se caísse
+      // num innerHTML. Só a tira de perfurações (estática) usa innerHTML.
+      const sprockets = document.createElement('div');
+      sprockets.className = 'card-sprockets';
+      sprockets.setAttribute('aria-hidden', 'true');
+      sprockets.innerHTML = '<span></span><span></span><span></span><span></span><span></span><span></span>';
+
+      const img = document.createElement('img');
+      // .src como propriedade: o navegador trata como URL, não como HTML —
+      // "javascript:" e afins não viram execução, e aspas no valor não
+      // quebram atributo nenhum.
+      img.src = filme.capa || '';
+      img.alt = `Capa de ${filme.titulo}`;
+      img.addEventListener('error', () => { img.style.display = 'none'; });
+
+      const body = document.createElement('div');
+      body.className = 'card-body';
+      const h3 = document.createElement('h3');
+      h3.textContent = filme.titulo;
+      const p = document.createElement('p');
+      p.textContent = filme.descricao || '';
+      body.append(h3, p);
+
+      card.append(sprockets, img, body);
 
       const abrir = () => {
         const params = new URLSearchParams({

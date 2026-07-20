@@ -4,6 +4,8 @@ const { loadSettings } = require('../lib/settings');
 const { forgetVideo } = require('../lib/mediaTools');
 const { enfileirarNaoMp4 } = require('../lib/reencodeWorker');
 const { coverPicker } = require('../lib/coverPicker');
+const { servirArquivoComRange } = require('../lib/httpRange');
+const { lerJson, salvarJson } = require('../lib/jsonStore');
 
 const CATALOG_PATH = path.join(__dirname, '..', 'data', 'catalog.json');
 const MOVIES_DIR = path.join(__dirname, '..', 'media', 'movies');
@@ -68,14 +70,7 @@ function scanMoviesDir(dir, baseDir = dir) {
 function sincronizarCatalogo(arquivosEncontrados) {
   const settings = loadSettings();
 
-  let listaAtual = [];
-  try {
-    const raw = fs.readFileSync(CATALOG_PATH, 'utf-8');
-    listaAtual = JSON.parse(raw);
-    if (!Array.isArray(listaAtual)) listaAtual = [];
-  } catch (err) {
-    listaAtual = [];
-  }
+  const listaAtual = lerJson(CATALOG_PATH, [], Array.isArray);
 
   const encontradosSet = new Set(arquivosEncontrados);
   const jaExistem = new Set(listaAtual.map((item) => item.arquivo));
@@ -117,7 +112,7 @@ function sincronizarCatalogo(arquivosEncontrados) {
   const listaAtualizada = [...listaBase, ...novasEntradas];
 
   try {
-    fs.writeFileSync(CATALOG_PATH, JSON.stringify(listaAtualizada, null, 2) + '\n', 'utf-8');
+    salvarJson(CATALOG_PATH, listaAtualizada);
 
     if (faltando.length > 0) {
       console.log(
@@ -242,40 +237,9 @@ function handleStream(req, res, query) {
     return res.end('Arquivo não encontrado ou caminho inválido.');
   }
 
-  const stat = fs.statSync(filePath);
-  const fileSize = stat.size;
-  const range = req.headers.range;
-  const contentType = getMimeType(filePath);
-
-  if (range) {
-    const [startStr, endStr] = range.replace(/bytes=/, '').split('-');
-    const start = parseInt(startStr, 10);
-    const end = endStr ? parseInt(endStr, 10) : fileSize - 1;
-
-    if (isNaN(start) || start >= fileSize) {
-      res.writeHead(416, { 'Content-Range': `bytes */${fileSize}` });
-      return res.end();
-    }
-
-    const chunkSize = end - start + 1;
-    const stream = fs.createReadStream(filePath, { start, end });
-
-    res.writeHead(206, {
-      'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-      'Accept-Ranges': 'bytes',
-      'Content-Length': chunkSize,
-      'Content-Type': contentType,
-    });
-
-    stream.pipe(res);
-  } else {
-    res.writeHead(200, {
-      'Content-Length': fileSize,
-      'Content-Type': contentType,
-      'Accept-Ranges': 'bytes',
-    });
-    fs.createReadStream(filePath).pipe(res);
-  }
+  // Toda a mecânica de range (e a robustez a cabeçalhos malformados) mora em
+  // lib/httpRange.js, compartilhada com a rota de faixa de áudio.
+  servirArquivoComRange(req, res, filePath, getMimeType(filePath));
 }
 
 module.exports = { handleMoviesApi, handleStream, resolveMoviePath, scanMoviesDir, sincronizarCatalogo, MOVIES_DIR };

@@ -1,6 +1,7 @@
 const fs = require('fs');
 const { resolveMoviePath } = require('./movies');
 const { probeTracks, getSubtitle, getAudioTrack } = require('../lib/mediaTools');
+const { servirArquivoComRange } = require('../lib/httpRange');
 
 function sendError(res, code, msg) {
   res.writeHead(code, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -66,45 +67,11 @@ function handleMediaAudio(req, res, query) {
   }
 
   getAudioTrack(filePath, faixa)
-    .then((m4aPath) => servirComRange(req, res, m4aPath, 'audio/mp4'))
+    .then((m4aPath) => servirArquivoComRange(req, res, m4aPath, 'audio/mp4'))
     .catch((err) => {
       console.error('[media] falha ao extrair faixa de áudio:', err.message);
       sendError(res, 500, 'Não foi possível extrair a faixa de áudio.');
     });
-}
-
-// Serve um arquivo com suporte a range requests (mesma mecânica do /stream
-// em routes/movies.js) — sem isso o <audio> não consegue fazer seek, e a
-// sincronia com o vídeo depende de seek o tempo todo.
-function servirComRange(req, res, filePath, contentType) {
-  const fileSize = fs.statSync(filePath).size;
-  const range = req.headers.range;
-
-  if (range) {
-    const [startStr, endStr] = range.replace(/bytes=/, '').split('-');
-    const start = parseInt(startStr, 10);
-    const end = endStr ? parseInt(endStr, 10) : fileSize - 1;
-
-    if (isNaN(start) || start >= fileSize) {
-      res.writeHead(416, { 'Content-Range': `bytes */${fileSize}` });
-      return res.end();
-    }
-
-    res.writeHead(206, {
-      'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-      'Accept-Ranges': 'bytes',
-      'Content-Length': end - start + 1,
-      'Content-Type': contentType,
-    });
-    return fs.createReadStream(filePath, { start, end }).pipe(res);
-  }
-
-  res.writeHead(200, {
-    'Content-Length': fileSize,
-    'Content-Type': contentType,
-    'Accept-Ranges': 'bytes',
-  });
-  fs.createReadStream(filePath).pipe(res);
 }
 
 module.exports = { handleMediaTracks, handleMediaSubtitle, handleMediaAudio };

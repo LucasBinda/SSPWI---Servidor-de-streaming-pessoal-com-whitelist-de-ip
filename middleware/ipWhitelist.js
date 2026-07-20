@@ -3,6 +3,7 @@ const path = require('path');
 const { ipEstaAutorizado } = require('./ipMatch');
 const { loadSettings } = require('../lib/settings');
 const { sessaoDaRequisicao } = require('../lib/sessionToken');
+const { salvarJson } = require('../lib/jsonStore');
 
 const WHITELIST_PATH = path.join(__dirname, '..', 'config', 'whitelist.json');
 
@@ -25,8 +26,14 @@ function loadWhitelist() {
   };
 }
 
+// Escrita atômica (tmp+rename): a whitelist é reescrita a cada
+// auto-autorização de IP. Um writeFileSync interrompido a corromperia, e aí
+// TODA leitura seguinte lançaria — negando acesso a todo mundo (500) até
+// alguém consertar o arquivo à mão. A leitura (loadWhitelist) continua
+// lançando de propósito: arquivo ausente/inválido deve NEGAR (fail-closed),
+// não abrir com lista vazia silenciosa.
 function salvarWhitelist(dados) {
-  fs.writeFileSync(WHITELIST_PATH, JSON.stringify(dados, null, 2) + '\n', 'utf-8');
+  salvarJson(WHITELIST_PATH, dados);
 }
 
 // Matricula (ou renova) o IP atual na lista automática, com expiração

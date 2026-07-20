@@ -19,6 +19,26 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const COVERS_DIR = path.join(__dirname, 'media', 'covers');
 
 const server = http.createServer((req, res) => {
+  // Rede de segurança do processo: qualquer exceção SÍNCRONA num handler
+  // (ex.: um Range malformado que escapasse da validação, um bug novo)
+  // derrubaria o servidor inteiro sem isto — um único cliente tirava todo
+  // mundo do ar. Aqui vira um 500 e o servidor segue de pé. Erros de stream
+  // JÁ iniciado não caem aqui (rodam noutro tick) — são tratados no 'error'
+  // do próprio stream (lib/httpRange.js).
+  try {
+    manejarRequisicao(req, res);
+  } catch (err) {
+    console.error(`[servidor] erro não tratado em ${req.method} ${req.url}:`, err && err.message);
+    if (!res.headersSent) {
+      res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Erro interno do servidor.');
+    } else {
+      res.destroy();
+    }
+  }
+});
+
+function manejarRequisicao(req, res) {
   // Camada de acesso: se o IP não estiver autorizado, checarWhitelist já
   // escreve a resposta 403 sozinha e retorna false — a requisição para aqui.
   if (!checarWhitelist(req, res)) {
@@ -50,12 +70,13 @@ const server = http.createServer((req, res) => {
   // evita decodificar duas vezes o mesmo caminho.
   const pathname = parsedUrl.pathname;
 
-  // /watchtime/save aceita POST (o player grava via navigator.sendBeacon,
-  // que sempre manda POST) — por isso é checado ANTES da restrição geral
-  // de método GET/HEAD logo abaixo. A sessão é validada dentro do handler
-  // (precisa do uid do cookie de qualquer forma).
+  // /watchtime/save é POST-only: o player grava via navigator.sendBeacon,
+  // que SEMPRE manda POST. Aceitar GET deixaria uma gravação com efeito
+  // colateral acessível por URL simples (uma <img src> maliciosa a
+  // dispararia) — SameSite=Strict já barra isso, mas restringir ao POST é a
+  // trava correta. Checado ANTES da restrição geral GET/HEAD abaixo.
   if (pathname === '/watchtime/save') {
-    if (req.method !== 'GET' && req.method !== 'POST') {
+    if (req.method !== 'POST') {
       res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
       return res.end('Método não suportado.');
     }
@@ -138,7 +159,7 @@ const server = http.createServer((req, res) => {
   // Frontend estático (catálogo, player, css, js) — "/" vira index.html
   const relPath = pathname === '/' ? 'index.html' : pathname.replace(/^\//, '');
   return serveStatic(PUBLIC_DIR, relPath, res);
-});
+}
 
 server.listen(PORT, () => {
   console.log('Lembre de abrir a porta no firewall/roteador para acesso remoto');
