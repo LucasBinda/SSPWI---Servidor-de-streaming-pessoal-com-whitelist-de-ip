@@ -1,12 +1,12 @@
 const http = require('http');
 const os = require('os');
-const path = require('path');
 
 const checarWhitelist = require('./middleware/ipWhitelist');
 const { handleAuthSession, checarSessao } = require('./middleware/sessionCookie');
 const { logManager } = require('./lib/logManager');
 const { loadSettings } = require('./lib/settings');
-const { handleMoviesApi, handleStream, scanMoviesDir, sincronizarCatalogo, MOVIES_DIR } = require('./routes/movies');
+const { handleMoviesApi, handleStream } = require('./routes/movies');
+const { scanMoviesDir, sincronizarCatalogo } = require('./lib/catalog');
 const { handleMediaTracks, handleMediaSubtitle, handleMediaAudio } = require('./routes/media');
 const { handleWatchTimeGet, handleWatchTimeSave } = require('./routes/watchTime');
 const { podarOrfaos } = require('./lib/watchTime');
@@ -14,9 +14,9 @@ const { prepararWorker, enfileirarNaoMp4 } = require('./lib/reencodeWorker');
 const { coverPicker } = require('./lib/coverPicker');
 const { serveStatic } = require('./lib/staticServer');
 
+const { PUBLIC_DIR, COVERS_DIR, MOVIES_DIR } = require('./lib/paths');
+
 const PORT = process.env.PORT || 3000;
-const PUBLIC_DIR = path.join(__dirname, 'public');
-const COVERS_DIR = path.join(__dirname, 'media', 'covers');
 
 const server = http.createServer((req, res) => {
   // Rede de segurança do processo: qualquer exceção SÍNCRONA num handler

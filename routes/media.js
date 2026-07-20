@@ -2,11 +2,7 @@ const fs = require('fs');
 const { resolveMoviePath } = require('./movies');
 const { probeTracks, getSubtitle, getAudioTrack } = require('../lib/mediaTools');
 const { servirArquivoComRange } = require('../lib/httpRange');
-
-function sendError(res, code, msg) {
-  res.writeHead(code, { 'Content-Type': 'text/plain; charset=utf-8' });
-  res.end(msg);
-}
+const { sendError } = require('./util');
 
 // GET /media/tracks?arquivo=<relPath>
 // Lista as faixas de áudio/legenda e a duração do arquivo (via ffprobe) pro

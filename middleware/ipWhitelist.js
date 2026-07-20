@@ -1,11 +1,9 @@
 const fs = require('fs');
-const path = require('path');
 const { ipEstaAutorizado } = require('./ipMatch');
 const { loadSettings } = require('../lib/settings');
 const { sessaoDaRequisicao } = require('../lib/sessionToken');
 const { salvarJson } = require('../lib/jsonStore');
-
-const WHITELIST_PATH = path.join(__dirname, '..', 'config', 'whitelist.json');
+const { WHITELIST_PATH } = require('../lib/paths');
 
 // Lê o arquivo a cada requisição de propósito: assim dá pra editar
 // a whitelist.json e aplicar na hora, sem reiniciar o servidor.

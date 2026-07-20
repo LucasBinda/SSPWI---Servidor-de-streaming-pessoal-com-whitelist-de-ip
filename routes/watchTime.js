@@ -1,16 +1,12 @@
 const { sessaoDaRequisicao } = require('../lib/sessionToken');
 const { resolveMoviePath } = require('./movies');
 const { salvarTempo, obterTempo } = require('../lib/watchTime');
+const { sendError } = require('./util');
 
 // Rotas de watch time. As duas assumem que whitelist + sessão já passaram
 // no server.js — aqui só extraímos o uid do cookie (pra saber DE QUEM é a
 // minutagem) e validamos o arquivo com o mesmo resolveMoviePath de sempre
 // (nada de gravar chave de arquivo que não existe no acervo).
-
-function sendError(res, code, msg) {
-  res.writeHead(code, { 'Content-Type': 'text/plain; charset=utf-8' });
-  res.end(msg);
-}
 
 // GET /watchtime/get?arquivo=<relPath> -> { segundos }
 function handleWatchTimeGet(req, res, query) {
