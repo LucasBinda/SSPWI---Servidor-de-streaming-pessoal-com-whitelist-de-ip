@@ -7,7 +7,7 @@ const { handleAuthSession, checarSessao } = require('./middleware/sessionCookie'
 const { logManager } = require('./lib/logManager');
 const { loadSettings } = require('./lib/settings');
 const { handleMoviesApi, handleStream, scanMoviesDir, sincronizarCatalogo, MOVIES_DIR } = require('./routes/movies');
-const { handleMediaTracks, handleMediaSubtitle } = require('./routes/media');
+const { handleMediaTracks, handleMediaSubtitle, handleMediaAudio } = require('./routes/media');
 const { handleWatchTimeGet, handleWatchTimeSave } = require('./routes/watchTime');
 const { podarOrfaos } = require('./lib/watchTime');
 const { prepararWorker, enfileirarNaoMp4 } = require('./lib/reencodeWorker');
@@ -116,6 +116,11 @@ const server = http.createServer((req, res) => {
     const query = Object.fromEntries(parsedUrl.searchParams);
     if (query.arquivo) logManager.registrarChamada(clientIp, `legenda: ${query.arquivo}`);
     return handleMediaSubtitle(req, res, query);
+  }
+  if (pathname === '/media/audio') {
+    const query = Object.fromEntries(parsedUrl.searchParams);
+    if (query.arquivo) logManager.registrarChamada(clientIp, `faixa de áudio: ${query.arquivo}`);
+    return handleMediaAudio(req, res, query);
   }
 
   // Watch time: minutagem salva por usuário (uid do cookie de sessão).
