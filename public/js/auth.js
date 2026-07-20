@@ -71,3 +71,8 @@ const Auth = (() => {
 
   return { garantir, iniciarPolling };
 })();
+
+// Exposto no window de propósito: o player.js virou um <script type="module">
+// (escopo próprio), e módulo não enxerga o `const Auth` de um script clássico
+// — window.Auth é o ponto de acesso comum pro módulo e pro catalog.js.
+window.Auth = Auth;
