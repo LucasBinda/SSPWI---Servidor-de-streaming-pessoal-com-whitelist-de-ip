@@ -5,7 +5,8 @@
   "main": "server.js",
   "author": "LucasBinda (https://github.com/LucasBinda)",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test"
   },
   "license": "MIT",
   "dependencies": {}

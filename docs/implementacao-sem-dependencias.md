@@ -145,7 +145,57 @@ Antes de considerar pronta, testei (rodando o servidor de verdade, sem
   (ou por mim, na próxima vez que você pedir), já que não existe mais um
   mantenedor de terceiros cuidando dessa camada
 
-## 8. Recomendação
+## 8. Organização atual dos módulos (pós-reorganização)
+
+Depois de uma revisão de código, o projeto foi reorganizado pra separar
+melhor as responsabilidades — sem trocar nenhuma decisão de arquitetura
+(ainda zero dependências, roteamento manual, config lida por requisição).
+Mapa de quem faz o quê:
+
+```
+server.js                 dispatcher HTTP (roteamento if/else) + boot
+lib/paths.js              TODOS os caminhos do projeto num lugar só
+lib/jsonStore.js          leitura/escrita ATÔMICA dos JSON (catalog, watchtime, ...)
+lib/httpRange.js          range requests robustos (compartilhado /stream e /media/audio)
+lib/ffmpeg.js             helper único de spawn ffmpeg/ffprobe
+lib/catalog.js            DOMÍNIO do catálogo (scan, sincronização, título, capa)
+routes/movies.js          HTTP do catálogo e streaming (fino, usa lib/catalog)
+routes/media.js           HTTP de faixas/legenda/áudio
+routes/watchTime.js       HTTP do watch time
+routes/util.js            sendError compartilhado
+middleware/ipWhitelist.js whitelist + auto-whitelist por sessão
+middleware/ipMatch.js     comparação de IP exato/CIDR (v4/v6)
+lib/sessionToken.js       token de sessão HMAC (login persistente)
+lib/mediaTools.js         ffprobe + extração de legenda/áudio (cache)
+lib/reencodeWorker.js     conversão pra mp4 em background (CPU/GPU)
+lib/coverPicker.js        capa automática (frame do filme)
+lib/watchTime.js          persistência da minutagem por usuário
+lib/staticServer.js       arquivos estáticos (public/, covers/)
+lib/logManager.js         logs de conexão/chamada (deduplicados)
+public/js/player.js       orquestrador do player (ES module)
+public/js/player/*.js      módulos do player: legendas, tela, audio, watchtime
+```
+
+Princípio geral: `routes/*` só traduz requisição↔resposta; a lógica de
+verdade mora em `lib/*`. Um caminho de arquivo só é considerado seguro por
+UMA função (`resolveMoviePath`), e um JSON só é lido/gravado por UM módulo
+(`jsonStore`).
+
+## 9. Testes automatizados
+
+Há uma suíte com o runner nativo do Node (`node:test`, zero dependência):
+
+```
+npm test          # roda test/*.test.js
+```
+
+Cobre as funções puras e críticas: `httpRange` (todos os casos de Range,
+inclusive os malformados que derrubavam o servidor), `ipMatch` (CIDR v4/v6 e
+casos de borda), `sessionToken` (assinatura, expiração, teto de vida),
+`jsonStore` (round-trip, corrupção, atomicidade) e `watchTime` (poda,
+renomeação — com backup/restore do arquivo real).
+
+## 10. Recomendação
 
 Para o tamanho e o propósito deste projeto (servir um catálogo simples e
 fazer streaming para IPs conhecidos), essa troca vale a pena: a

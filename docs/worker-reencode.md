@@ -73,10 +73,15 @@ CPU e, quando há GPU NVIDIA com driver funcionando, `hevc_nvenc` (encode na
 GPU) e `hevc_nvenc` + NVDEC (decode também na GPU). Cada candidato converte
 a mesma origem por até 30 segundos — ou até 50% do filme, o que vier
 primeiro — com a saída descartada (`-f null`); vence quem sustentou a maior
-velocidade média, e só o vencedor converte o arquivo inteiro. Candidato que
-falha (máquina sem NVIDIA, codec sem suporte no NVDEC) tira nota zero e sai
-da disputa: a prova é também a detecção automática de hardware, e em
-máquinas sem GPU o custo dela é ~zero (os modos nvenc falham na hora).
+velocidade média, e só o vencedor converte o arquivo inteiro.
+
+Os candidatos de GPU rodam PRIMEIRO. Numa máquina sem NVIDIA eles falham em
+menos de 1 segundo cada e o worker vai direto pro software, **sem gastar os
+30s da prova dele** — não há o que comparar quando o software é a única
+opção. Só quando alguma GPU responde é que o software também é provado, pra
+escolher de verdade o mais rápido. Ou seja: a prova é também a detecção
+automática de hardware, sem nenhuma chave de configuração, e em máquinas
+sem GPU o custo dela é praticamente zero.
 
 No NVENC, o `reencodeCrf` é aplicado como `-cq` (mesma escala) e presets do
 x26x são traduzidos para `p1`-`p7`. A compressão do NVENC é pior que a do
