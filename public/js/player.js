@@ -9,6 +9,7 @@ import {
 } from './player/tela.js';
 import { preencherFaixas, configurarEqualizador } from './player/audio.js';
 import { configurarWatchTime } from './player/watchtime.js';
+import { configurarStatsNerd } from './player/stats.js';
 
 // Auth vem de js/auth.js (script clássico carregado ANTES deste módulo, que
 // expõe window.Auth) — o cookie de sessão é HttpOnly, então este código só
@@ -80,6 +81,9 @@ function iniciarPlayer(arquivo) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     })
-    .then((tracks) => preencherFaixas(tracks, video, arquivo))
+    .then((tracks) => {
+      preencherFaixas(tracks, video, arquivo);
+      configurarStatsNerd(tracks, video, arquivo);
+    })
     .catch((err) => console.error('[player] falha ao carregar metadados do vídeo:', err));
 }

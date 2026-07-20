@@ -18,6 +18,17 @@ export function configurarPainelConfiguracoes({ arquivo, video }) {
     btnConfig.setAttribute('aria-expanded', String(!estaAberto));
   });
 
+  // Clicar FORA do painel (e fora da engrenagem) fecha o painel. Só age com
+  // ele aberto; cliques dentro dele (selects, sliders, botões) não fecham,
+  // e clicar na própria engrenagem cai no handler acima (que alterna) — o
+  // guard de btnConfig.contains evita o painel abrir e fechar no mesmo clique.
+  document.addEventListener('click', (e) => {
+    if (painel.hidden) return;
+    if (painel.contains(e.target) || btnConfig.contains(e.target)) return;
+    painel.hidden = true;
+    btnConfig.setAttribute('aria-expanded', 'false');
+  });
+
   let cues = [];
   let ultimoHtml = '';
 

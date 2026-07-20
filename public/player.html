@@ -22,6 +22,11 @@
 
       <div id="legenda-overlay" class="legenda-overlay" hidden></div>
 
+      <!-- "Stats de nerd": dados técnicos no canto superior esquerdo, sobre o
+           filme. Toggle no menu de config; pointer-events:none pra não pegar
+           cliques. -->
+      <div id="stats-nerd" class="stats-nerd" hidden aria-hidden="true"></div>
+
       <button id="btn-config" class="btn-config" type="button" aria-label="Configurações do player" aria-expanded="false">⚙</button>
 
       <div id="painel-config" class="painel-config" hidden>
@@ -60,6 +65,13 @@
             <input type="checkbox" id="toggle-equalizador" class="switch" role="switch">
           </div>
           <div id="painel-equalizador" class="painel-equalizador" hidden></div>
+        </div>
+
+        <div class="painel-secao">
+          <div class="linha-toggle">
+            <label for="toggle-stats">Stats de nerd</label>
+            <input type="checkbox" id="toggle-stats" class="switch" role="switch">
+          </div>
         </div>
       </div>
     </div>

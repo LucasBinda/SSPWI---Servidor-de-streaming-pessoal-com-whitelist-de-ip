@@ -400,6 +400,45 @@ input.switch:focus-visible {
   display: none;
 }
 
+/* "Stats de nerd": dados técnicos no canto superior esquerdo, sobre o filme */
+.stats-nerd {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  margin: 0;
+  max-width: calc(100% - 24px);
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(23, 21, 18, 0.72);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: 'SFMono-Regular', ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  pointer-events: none;
+  z-index: 4;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* Cada linha "rótulo: valor" — o rótulo em <b> ganha uma coluna fixa pra os
+   valores alinharem. */
+.stats-nerd div {
+  display: flex;
+  gap: 8px;
+}
+
+/* Rótulos dos campos em âmbar, com coluna fixa pra os valores alinharem */
+.stats-nerd b {
+  display: inline-block;
+  min-width: 92px;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.stats-nerd[hidden] {
+  display: none;
+}
+
 /* Modo retrato: o filme toma a janela inteira do navegador (sem fullscreen
    do sistema). O shell vira uma camada fixa sobre a página; Esc sai. */
 body.modo-retrato {
