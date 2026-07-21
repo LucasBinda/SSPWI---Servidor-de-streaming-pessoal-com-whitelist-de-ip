@@ -28,13 +28,18 @@ function handleAuthSession(req, res) {
 
   const maxAgeSegundos = Math.max(1, Math.floor((exp - Date.now()) / 1000));
 
+  // Secure só quando o acesso passa por um proxy HTTPS (Caddy/nginx, ver
+  // docs/https-duckdns.md): com a flag, o navegador só envia o cookie
+  // criptografado — em HTTP puro na LAN ela precisa ficar DESLIGADA, senão o
+  // cookie nunca chega e o login quebra. Por isso é opt-in via settings.
+  const flagSecure = loadSettings().atrasDeProxyTls ? '; Secure' : '';
+
   res.writeHead(200, {
     'Content-Type': 'application/json; charset=utf-8',
     // HttpOnly: JS da página não lê o cookie (XSS não rouba sessão).
     // SameSite=Strict: outros sites não conseguem disparar requisições
-    // autenticadas. Sem "Secure" de propósito: o servidor roda em HTTP
-    // puro na LAN; atrás de um proxy TLS, adicione Secure aqui.
-    'Set-Cookie': `${NOME_COOKIE}=${token}; Max-Age=${maxAgeSegundos}; Path=/; HttpOnly; SameSite=Strict`,
+    // autenticadas.
+    'Set-Cookie': `${NOME_COOKIE}=${token}; Max-Age=${maxAgeSegundos}; Path=/; HttpOnly; SameSite=Strict${flagSecure}`,
     'Cache-Control': 'no-store',
   });
   res.end(JSON.stringify({

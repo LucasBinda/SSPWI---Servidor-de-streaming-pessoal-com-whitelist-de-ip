@@ -1,0 +1,20 @@
+# Exemplo de Caddyfile pro streaming-server — o caminho RECOMENDADO de HTTPS
+# (passo a passo completo: docs/https-duckdns.md).
+# Copie para /etc/caddy/Caddyfile e troque SEUNOME pelo seu subdomínio.
+#
+# O Caddy cuida de TUDO do TLS sozinho: emite o certificado Let's Encrypt,
+# renova antes de vencer e redireciona 80->443 — não existe "certbot" neste
+# fluxo. Só precisa das portas 80 e 443 encaminhadas pra esta máquina e do
+# domínio DuckDNS apontando pra cá (o próprio servidor mantém o aponte, ver
+# lib/duckdns.js). Se o DNS/porta ainda não estiverem prontos, o Caddy fica
+# re-tentando a emissão sozinho — a ordem dos passos não é fatal.
+
+SEUNOME.duckdns.org {
+	# O Node fica em HTTP puro local; o Caddy termina o TLS na frente.
+	# X-Forwarded-For já é enviado por padrão (o Node confia nele porque
+	# 127.0.0.1 está em proxiesConfiaveis).
+	reverse_proxy 127.0.0.1:3000 {
+		# Streaming: repassa os bytes na hora, sem juntar resposta em buffer
+		flush_interval -1
+	}
+}

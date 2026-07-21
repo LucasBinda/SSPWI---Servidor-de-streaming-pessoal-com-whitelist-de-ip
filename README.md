@@ -306,8 +306,10 @@ rede local), vale reforçar:
   porta na internet.
 - **HTTPS**: como é só streaming de leitura, HTTP já resolve, mas se o
   tráfego passar pela internet aberta, HTTPS evita que o link do vídeo (ou o
-  próprio conteúdo) seja visível a qualquer um na mesma rede. O caminho mais
-  simples é o Certbot por cima do nginx do exemplo em `deploy/`.
+  próprio conteúdo) seja visível a qualquer um na mesma rede. O caminho
+  suportado é Caddy + DuckDNS (domínio grátis, com o DNS dinâmico
+  re-apontado pelo próprio servidor; nginx+Certbot como alternativa) —
+  passo a passo completo em `docs/https-duckdns.md`.
 - **Formato de vídeo**: o worker de padronização já converte tudo pra
   `.mp4` sozinho — se um filme recém-adicionado não tocar, é só esperar a
   conversão em background terminar (acompanhe pelo log ou por

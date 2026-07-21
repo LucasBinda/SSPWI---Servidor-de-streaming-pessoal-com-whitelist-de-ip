@@ -11,6 +11,7 @@ const { handleMediaTracks, handleMediaSubtitle, handleMediaAudio } = require('./
 const { handleWatchTimeGet, handleWatchTimeSave } = require('./routes/watchTime');
 const { podarOrfaos } = require('./lib/watchTime');
 const { prepararWorker, enfileirarNaoMp4 } = require('./lib/reencodeWorker');
+const { iniciarAtualizadorDuckdns } = require('./lib/duckdns');
 const { coverPicker } = require('./lib/coverPicker');
 const { serveStatic } = require('./lib/staticServer');
 
@@ -200,4 +201,10 @@ server.listen(PORT, () => {
   };
   limparDadosDeSessoesMortas();
   setInterval(limparDadosDeSessoesMortas, 6 * 60 * 60 * 1000).unref();
+
+  // DNS dinâmico: com domínio+token do DuckDNS no config/settings.json, o
+  // servidor mantém o domínio apontando pro IP da casa — pré-requisito do
+  // HTTPS via proxy reverso (docs/https-duckdns.md). Sem configurar,
+  // fica dormente.
+  iniciarAtualizadorDuckdns();
 });

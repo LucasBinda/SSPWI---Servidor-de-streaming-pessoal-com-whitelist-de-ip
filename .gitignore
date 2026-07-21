@@ -31,6 +31,12 @@ data/watchtime.json
 # Se preferir versionar um exemplo, use um "whitelist.example.json" à parte.
 config/whitelist.json
 
+# Configurações reais — contêm o token do DuckDNS (segredo: com ele qualquer
+# um redireciona seu domínio). Só o settings.example.json é versionado.
+# Se o settings.json já estava rastreado, rode uma vez:
+#   git rm --cached config/settings.json
+config/settings.json
+
 # Caches gerados em runtime: legendas extraídas (cache/subs/) e temporários
 # do worker de conversão pra mp4 (cache/reencode/).
 cache/

@@ -1,30 +1,42 @@
-# Exemplo de reverse proxy com whitelist de IP também na camada de rede.
-# Copie para /etc/nginx/sites-available/streaming e ajuste os IPs e o domínio.
+# Exemplo de reverse proxy pro streaming-server com nginx — a ALTERNATIVA ao
+# caminho recomendado (Caddy, ver deploy/Caddyfile.example e o guia em
+# docs/https-duckdns.md). Instalação/uso do nginx e do Certbot: documentação
+# oficial de cada um —
+#   https://docs.nginx.com/nginx/admin-guide/web-server/reverse-proxy/
+#   https://certbot.eff.org/instructions
+# Copie para /etc/nginx/sites-available/streaming, ajuste SEUNOME e ative.
 #
-# Vantagem de fazer isso aqui alem do middleware do Node: o nginx recusa a
-# conexao antes mesmo dela chegar na aplicacao (defesa em profundidade).
+# O certbot (--nginx) edita este arquivo sozinho depois: cria o bloco :443
+# com o certificado e oferece o redirect 80->443 — não precisa escrever o
+# bloco TLS à mão.
 
 server {
     listen 80;
-    server_name SEU_DOMINIO_OU_IP;
+    listen [::]:80;
+    server_name SEUNOME.duckdns.org;
 
-    # Libere apenas os IPs conhecidos (mesmos do config/whitelist.json)
-    allow 192.168.0.10;
-    allow 127.0.0.1;
-    deny all;
+    # DEFESA EM PROFUNDIDADE (opcional): recusar IPs desconhecidos aqui, antes
+    # da conexão chegar no Node. ATENÇÃO com acesso externo: os IPs públicos
+    # de quem acessa de fora também precisariam estar na lista — se a ideia é
+    # justamente acesso remoto com IP variável, deixe comentado e confie na
+    # whitelist do Node (config/whitelist.json + auto-whitelist por sessão),
+    # que entende esse cenário.
+    # allow 192.168.0.0/24;
+    # allow 127.0.0.1;
+    # deny all;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
+        # O Node só confia neste cabeçalho porque a conexão vem de um proxy
+        # listado em proxiesConfiaveis (127.0.0.1 já é o padrão).
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
 
-        # Necessario para o video aceitar "pular" para qualquer ponto (seek)
+        # Necessário pro vídeo aceitar "pular" pra qualquer ponto (seek)
         proxy_set_header Range $http_range;
         proxy_set_header If-Range $http_if_range;
         proxy_buffering off;
     }
 }
-
-# Para HTTPS, o jeito mais simples e usar o Certbot (Let's Encrypt) por cima
-# desse mesmo bloco: `certbot --nginx -d SEU_DOMINIO`
