@@ -4,6 +4,7 @@ const { enfileirarNaoMp4 } = require('../lib/reencodeWorker');
 const { coverPicker } = require('../lib/coverPicker');
 const { servirArquivoComRange } = require('../lib/httpRange');
 const { MOVIES_DIR } = require('../lib/paths');
+const { logManager } = require('../lib/logManager');
 const {
   scanMoviesDir,
   sincronizarCatalogo,
@@ -54,7 +55,7 @@ function handleMoviesApi(req, res) {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(body);
   } catch (err) {
-    console.error('Falha ao montar o catálogo:', err.message);
+    logManager.registrarErro('catálogo', `falha ao montar o catálogo: ${err.message}`);
     res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ erro: 'Não foi possível carregar o catálogo.' }));
   }

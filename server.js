@@ -29,7 +29,7 @@ const server = http.createServer((req, res) => {
   try {
     manejarRequisicao(req, res);
   } catch (err) {
-    console.error(`[servidor] erro não tratado em ${req.method} ${req.url}:`, err && err.message);
+    logManager.registrarErro('servidor', `erro não tratado em ${req.method} ${req.url}: ${(err && err.message) || err}`);
     if (!res.headersSent) {
       res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('Erro interno do servidor.');

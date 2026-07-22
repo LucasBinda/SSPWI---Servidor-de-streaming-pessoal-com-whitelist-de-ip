@@ -4,6 +4,7 @@ const { loadSettings } = require('../lib/settings');
 const { sessaoDaRequisicao } = require('../lib/sessionToken');
 const { salvarJson } = require('../lib/jsonStore');
 const { WHITELIST_PATH } = require('../lib/paths');
+const { logManager } = require('../lib/logManager');
 
 // Lê o arquivo a cada requisição de propósito: assim dá pra editar
 // a whitelist.json e aplicar na hora, sem reiniciar o servidor.
@@ -48,14 +49,14 @@ function autoAutorizarIp(ip, sessao) {
     existente.expiraEm = sessao.exp;
   } else {
     vivas.push({ ip, usuario: sessao.uid, expiraEm: sessao.exp });
-    console.log(`[WHITELIST AUTO] IP ${ip} autorizado pela sessão do usuário ${sessao.uid} (expira ${new Date(sessao.exp).toISOString()})`);
+    logManager.info('whitelist', `IP ${ip} autorizado pela sessão do usuário ${sessao.uid} (expira ${new Date(sessao.exp).toISOString()})`);
   }
 
   dados.autoAllowedIps = vivas;
   try {
     salvarWhitelist(dados);
   } catch (err) {
-    console.error('[WHITELIST AUTO] falha ao salvar config/whitelist.json:', err.message);
+    logManager.registrarErro('whitelist', `falha ao salvar config/whitelist.json: ${err.message}`);
   }
 }
 
@@ -79,9 +80,9 @@ function podarAutoIpsExpirados() {
   dados.autoAllowedIps = vivas;
   try {
     salvarWhitelist(dados);
-    console.log('[WHITELIST AUTO] entradas expiradas removidas de config/whitelist.json');
+    logManager.info('whitelist', 'entradas expiradas removidas de config/whitelist.json');
   } catch (err) {
-    console.error('[WHITELIST AUTO] falha ao podar expirados:', err.message);
+    logManager.registrarErro('whitelist', `falha ao podar expirados: ${err.message}`);
   }
 }
 
@@ -142,7 +143,7 @@ function checarWhitelist(req, res) {
   try {
     whitelist = loadWhitelist();
   } catch (err) {
-    console.error('Falha ao ler config/whitelist.json:', err.message);
+    logManager.registrarErro('whitelist', `falha ao ler config/whitelist.json: ${err.message}`);
     res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Erro de configuração do servidor.');
     return false;
@@ -169,7 +170,7 @@ function checarWhitelist(req, res) {
     return true;
   }
 
-  console.warn(`[ACESSO BLOQUEADO] IP não autorizado: ${clientIp} -> ${req.method} ${req.url}`);
+  logManager.registrarBloqueio(clientIp, `IP não autorizado -> ${req.method} ${req.url}`);
   res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
   res.end('Acesso negado. Seu IP não está autorizado a acessar este serviço.');
   return false;

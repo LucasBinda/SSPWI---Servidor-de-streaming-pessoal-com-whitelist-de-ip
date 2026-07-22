@@ -1,5 +1,6 @@
 const { getClientIp } = require('./ipWhitelist');
 const { loadSettings } = require('../lib/settings');
+const { logManager } = require('../lib/logManager');
 const {
   emitirToken,
   sessaoDaRequisicao,
@@ -58,7 +59,7 @@ function checarSessao(req, res) {
 
   const settings = loadSettings();
   const ip = getClientIp(req, settings.proxiesConfiaveis);
-  console.warn(`[SESSÃO NEGADA] ${ip}: ${resultado.motivo} -> ${req.method} ${req.url}`);
+  logManager.registrarBloqueio(ip, `sessão negada (${resultado.motivo}) -> ${req.method} ${req.url}`);
   res.writeHead(401, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',

@@ -3,6 +3,7 @@ const { resolveMoviePath } = require('./movies');
 const { probeTracks, getSubtitle, getAudioTrack } = require('../lib/mediaTools');
 const { servirArquivoComRange } = require('../lib/httpRange');
 const { sendError } = require('./util');
+const { logManager } = require('../lib/logManager');
 
 // GET /media/tracks?arquivo=<relPath>
 // Lista as faixas de áudio/legenda e a duração do arquivo (via ffprobe) pro
@@ -17,7 +18,7 @@ function handleMediaTracks(req, res, query) {
       res.end(JSON.stringify(tracks));
     })
     .catch((err) => {
-      console.error('[media] falha ao sondar faixas:', err.message);
+      logManager.registrarErro('media', `falha ao sondar faixas: ${err.message}`);
       sendError(res, 500, 'Não foi possível ler as faixas do arquivo.');
     });
 }
@@ -43,7 +44,7 @@ function handleMediaSubtitle(req, res, query) {
       fs.createReadStream(vttPath).pipe(res);
     })
     .catch((err) => {
-      console.error('[media] falha ao extrair legenda:', err.message);
+      logManager.registrarErro('media', `falha ao extrair legenda: ${err.message}`);
       sendError(res, 500, 'Não foi possível extrair a legenda.');
     });
 }
@@ -65,7 +66,7 @@ function handleMediaAudio(req, res, query) {
   getAudioTrack(filePath, faixa)
     .then((m4aPath) => servirArquivoComRange(req, res, m4aPath, 'audio/mp4'))
     .catch((err) => {
-      console.error('[media] falha ao extrair faixa de áudio:', err.message);
+      logManager.registrarErro('media', `falha ao extrair faixa de áudio: ${err.message}`);
       sendError(res, 500, 'Não foi possível extrair a faixa de áudio.');
     });
 }
