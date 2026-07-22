@@ -8,8 +8,8 @@ const { loadSettings, validarAntiFilterLog } = require('./lib/settings');
 const { handleMoviesApi, handleStream } = require('./routes/movies');
 const { scanMoviesDir, sincronizarCatalogo } = require('./lib/catalog');
 const { handleMediaTracks, handleMediaSubtitle, handleMediaAudio } = require('./routes/media');
-const { handleWatchTimeGet, handleWatchTimeSave } = require('./routes/watchTime');
-const { podarOrfaos } = require('./lib/watchTime');
+const { handleWatchTimeGet, handleWatchTimeSave, handlePrefsGet, handlePrefsSave } = require('./routes/user');
+const { podarOrfaos, migrar: migrarUsuarios } = require('./lib/userStore');
 const { prepararWorker, enfileirarNaoMp4 } = require('./lib/reencodeWorker');
 const { iniciarAtualizadorDuckdns } = require('./lib/duckdns');
 const { coverPicker } = require('./lib/coverPicker');
@@ -71,18 +71,19 @@ function manejarRequisicao(req, res) {
   // evita decodificar duas vezes o mesmo caminho.
   const pathname = parsedUrl.pathname;
 
-  // /watchtime/save é POST-only: o player grava via navigator.sendBeacon,
-  // que SEMPRE manda POST. Aceitar GET deixaria uma gravação com efeito
-  // colateral acessível por URL simples (uma <img src> maliciosa a
-  // dispararia) — SameSite=Strict já barra isso, mas restringir ao POST é a
-  // trava correta. Checado ANTES da restrição geral GET/HEAD abaixo.
-  if (pathname === '/watchtime/save') {
+  // Gravações via navigator.sendBeacon são SEMPRE POST — checadas ANTES da
+  // restrição geral GET/HEAD abaixo. Aceitar GET numa rota com efeito
+  // colateral a deixaria acessível por URL simples (uma <img src> maliciosa a
+  // dispararia); SameSite=Strict já barra isso, mas POST-only é a trava certa.
+  if (pathname === '/watchtime/save' || pathname === '/user/prefs/save') {
     if (req.method !== 'POST') {
       res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
       return res.end('Método não suportado.');
     }
     const query = Object.fromEntries(parsedUrl.searchParams);
-    return handleWatchTimeSave(req, res, query);
+    return pathname === '/watchtime/save'
+      ? handleWatchTimeSave(req, res, query)
+      : handlePrefsSave(req, res, query);
   }
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -145,10 +146,14 @@ function manejarRequisicao(req, res) {
     return handleMediaAudio(req, res, query);
   }
 
-  // Watch time: minutagem salva por usuário (uid do cookie de sessão).
+  // Dados por usuário (uid do cookie): resume por filme e preferências que
+  // seguem o login (volume, idioma de áudio). Ver lib/userStore.js.
   if (pathname === '/watchtime/get') {
     const query = Object.fromEntries(parsedUrl.searchParams);
     return handleWatchTimeGet(req, res, query);
+  }
+  if (pathname === '/user/prefs') {
+    return handlePrefsGet(req, res);
   }
 
   // Capas dos filmes
@@ -186,6 +191,11 @@ server.listen(PORT, () => {
   if (ipv4) console.log(`IPv4: http://${ipv4.address}:${PORT}`);
   if (ipv6) console.log(`IPv6: http://[${ipv6.address}]:${PORT}`);
 
+
+  // Migração única (idempotente): converte o data/watchtime.json antigo pro
+  // novo data/users.json (watch time + prefs por usuário). Roda no boot,
+  // antes de servir; não faz nada se users.json já existe.
+  migrarUsuarios();
 
   // limpa temporários de conversões interrompidas e enfileira
   // qualquer não-mp4 já presente no acervo (vídeos adicionados enquanto o

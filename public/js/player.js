@@ -10,6 +10,7 @@ import {
 import { preencherFaixas, configurarEqualizador } from './player/audio.js';
 import { configurarWatchTime } from './player/watchtime.js';
 import { configurarStatsNerd } from './player/stats.js';
+import { configurarPrefsUsuario } from './player/prefs.js';
 
 // Auth vem de js/auth.js (script clássico carregado ANTES deste módulo, que
 // expõe window.Auth) — o cookie de sessão é HttpOnly, então este código só
@@ -84,6 +85,10 @@ function iniciarPlayer(arquivo) {
     .then((tracks) => {
       preencherFaixas(tracks, video, arquivo);
       configurarStatsNerd(tracks, video, arquivo);
+      // Preferências de usuário (volume + idioma de áudio) entram DEPOIS do
+      // preencherFaixas — precisam do seletor de áudio já montado pra
+      // auto-selecionar a faixa do idioma preferido.
+      configurarPrefsUsuario({ video, tracks, selectAudio: document.getElementById('select-audio') });
     })
     .catch((err) => console.error('[player] falha ao carregar metadados do vídeo:', err));
 }

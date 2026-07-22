@@ -24,7 +24,9 @@ data/reencode-state.json
 # permitiria forjar cookies de sessão.
 data/session-secret
 
-# Minutagem assistida por usuário — gerado em runtime.
+# Dados por usuário (watch time + preferências) — gerado em runtime.
+# watchtime.json é o formato ANTIGO, mantido só como backup da migração única.
+data/users.json
 data/watchtime.json
 
 # Whitelist de IP — evita vazar os IPs autorizados publicamente no repositório.
