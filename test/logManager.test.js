@@ -81,14 +81,20 @@ test('registrarErro: escreve em erros.log com origem e sem ANSI', async (t) => {
   delete process.env.NO_COLOR;
 });
 
-test('registrarBloqueio: cada tentativa é uma linha em bloqueios.log', async (t) => {
+test('registrarBloqueio: dedup por IP+motivo (o laço de reautorização vira 1 linha)', async (t) => {
   t.mock.method(console, 'warn', () => {});
+  // mesmo IP+motivo repetido (o spam do laço) -> uma linha só
+  lm.registrarBloqueio('8.8.8.8', 'sessão negada -> GET /api/movies');
+  lm.registrarBloqueio('8.8.8.8', 'sessão negada -> GET /api/movies');
+  lm.registrarBloqueio('8.8.8.8', 'sessão negada -> GET /api/movies');
+  // motivo diferente = evento novo -> registra
   lm.registrarBloqueio('8.8.8.8', 'IP não autorizado -> GET /');
-  lm.registrarBloqueio('8.8.8.8', 'IP não autorizado -> GET /'); // sem dedup
+  // IP diferente, mesmo motivo = evento novo -> registra
+  lm.registrarBloqueio('9.9.9.9', 'sessão negada -> GET /api/movies');
   await esperaEscrita();
   const linhas = linhasDe('bloqueios.log');
-  assert.strictEqual(linhas.length, 2);
-  assert.match(linhas[0], / - 8\.8\.8\.8 - IP não autorizado -> GET \/$/);
+  assert.strictEqual(linhas.length, 3, 'o laço vira 1 linha; motivo/IP distintos registram');
+  assert.match(linhas[0], / - 8\.8\.8\.8 - sessão negada -> GET \/api\/movies$/);
 });
 
 test('console recebe a cor certa por categoria (FORCE_COLOR)', (t) => {
