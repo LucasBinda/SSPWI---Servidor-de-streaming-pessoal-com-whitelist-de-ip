@@ -8,5 +8,6 @@
   "trocarCapasAutoNoCatalogo": false,
   "duckdnsDominio": "",
   "duckdnsToken": "",
-  "atrasDeProxyTls": false
+  "atrasDeProxyTls": false,
+  "antiFilterLog": false
 }

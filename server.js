@@ -4,7 +4,7 @@ const os = require('os');
 const checarWhitelist = require('./middleware/ipWhitelist');
 const { handleAuthSession, checarSessao } = require('./middleware/sessionCookie');
 const { logManager } = require('./lib/logManager');
-const { loadSettings } = require('./lib/settings');
+const { loadSettings, validarAntiFilterLog } = require('./lib/settings');
 const { handleMoviesApi, handleStream } = require('./routes/movies');
 const { scanMoviesDir, sincronizarCatalogo } = require('./lib/catalog');
 const { handleMediaTracks, handleMediaSubtitle, handleMediaAudio } = require('./routes/media');
@@ -163,10 +163,19 @@ function manejarRequisicao(req, res) {
 }
 
 server.listen(PORT, () => {
+  // Validação do antiFilterLog: só true/false explícitos valem; ausente ou
+  // inválido cai no padrão false (dedupe ligado). O runtime já é seguro
+  // (deveRegistrar compara === true) — este aviso é só pra você saber.
+  const afl = validarAntiFilterLog();
+  if (afl.valido) {
+    logManager.info('config', `antiFilterLog: ${afl.valor} — ${afl.valor ? 'dedupe de logs DESLIGADO (todo bloqueio/chamada/conexão registrado)' : 'dedupe de logs ativo'}`);
+  } else {
+    logManager.aviso('config', 'antiFilterLog ausente ou inválido em config/settings.json (esperado true/false) — usando padrão false, dedupe de logs ativo');
+  }
   console.log('Lembre de abrir a porta no firewall/roteador para acesso remoto');
   console.log(`Servidor de streaming rodando na porta ${PORT}`);
   console.log(`Acesse via http://<ip-do-servidor>:${PORT}`);
-
+  
   // Endereços reais desta máquina, um por família, pra copiar e colar
   // direto no navegador. Link-local IPv6 (fe80::) fica de fora: não é
   // acessível de outra rede e exigiria zone-id na URL. IPv6 vai entre
@@ -176,6 +185,7 @@ server.listen(PORT, () => {
   const ipv6 = interfaces.find((i) => i && !i.internal && i.family === 'IPv6' && !i.address.startsWith('fe80'));
   if (ipv4) console.log(`IPv4: http://${ipv4.address}:${PORT}`);
   if (ipv6) console.log(`IPv6: http://[${ipv6.address}]:${PORT}`);
+
 
   // limpa temporários de conversões interrompidas e enfileira
   // qualquer não-mp4 já presente no acervo (vídeos adicionados enquanto o

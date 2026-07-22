@@ -4,6 +4,24 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { LogManager, pintar } = require('../lib/logManager');
+const { validarAntiFilterLog } = require('../lib/settings');
+const { SETTINGS_PATH } = require('../lib/paths');
+
+// Roda fn com o antiFilterLog do settings.json real ajustado, e SEMPRE
+// restaura o arquivo depois (mesmo se a asserção falhar). valor === undefined
+// remove a chave. As funções sob teste leem o arquivo, então precisamos dele.
+async function comAntiFilterLog(valor, fn) {
+  const backup = fs.readFileSync(SETTINGS_PATH, 'utf-8');
+  try {
+    const base = JSON.parse(backup);
+    if (valor === undefined) delete base.antiFilterLog;
+    else base.antiFilterLog = valor;
+    fs.writeFileSync(SETTINGS_PATH, JSON.stringify(base, null, 2) + '\n');
+    return await fn();
+  } finally {
+    fs.writeFileSync(SETTINGS_PATH, backup);
+  }
+}
 
 // Instância própria com pasta temporária — nunca toca no logs/ real.
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sspwi-logs-'));
@@ -95,6 +113,36 @@ test('registrarBloqueio: dedup por IP+motivo (o laço de reautorização vira 1 
   const linhas = linhasDe('bloqueios.log');
   assert.strictEqual(linhas.length, 3, 'o laço vira 1 linha; motivo/IP distintos registram');
   assert.match(linhas[0], / - 8\.8\.8\.8 - sessão negada -> GET \/api\/movies$/);
+});
+
+test('validarAntiFilterLog: true/false valem; ausente ou não-booleano -> false inválido', async () => {
+  await comAntiFilterLog(true, () => assert.deepStrictEqual(validarAntiFilterLog(), { valor: true, valido: true }));
+  await comAntiFilterLog(false, () => assert.deepStrictEqual(validarAntiFilterLog(), { valor: false, valido: true }));
+  await comAntiFilterLog('yes', () => assert.deepStrictEqual(validarAntiFilterLog(), { valor: false, valido: false }));
+  await comAntiFilterLog(1, () => assert.deepStrictEqual(validarAntiFilterLog(), { valor: false, valido: false }));
+  await comAntiFilterLog(undefined, () => assert.deepStrictEqual(validarAntiFilterLog(), { valor: false, valido: false }));
+});
+
+test('antiFilterLog=true desliga o dedupe: 3 repetições viram 3 linhas', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  await comAntiFilterLog(true, async () => {
+    const lm2 = new LogManager({ logsDir: dir }); // maps de dedup zerados
+    for (let i = 0; i < 3; i++) lm2.registrarBloqueio('7.7.7.7', 'sessão negada -> GET /api/movies');
+    await esperaEscrita();
+    const linhas = linhasDe('bloqueios.log').filter((l) => l.includes('7.7.7.7'));
+    assert.strictEqual(linhas.length, 3, 'sem dedupe, cada tentativa é uma linha');
+  });
+});
+
+test('antiFilterLog=false mantém o dedupe (contraprova)', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  await comAntiFilterLog(false, async () => {
+    const lm3 = new LogManager({ logsDir: dir });
+    for (let i = 0; i < 3; i++) lm3.registrarBloqueio('6.6.6.6', 'sessão negada -> GET /api/movies');
+    await esperaEscrita();
+    const linhas = linhasDe('bloqueios.log').filter((l) => l.includes('6.6.6.6'));
+    assert.strictEqual(linhas.length, 1, 'com dedupe, o laço vira 1 linha');
+  });
 });
 
 test('console recebe a cor certa por categoria (FORCE_COLOR)', (t) => {
