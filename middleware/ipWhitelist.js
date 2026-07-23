@@ -5,6 +5,7 @@ const { sessaoDaRequisicao } = require('../lib/sessionToken');
 const { salvarJson } = require('../lib/jsonStore');
 const { WHITELIST_PATH } = require('../lib/paths');
 const { logManager } = require('../lib/logManager');
+const { Store } = require('../lib/stores');
 
 // Lê o arquivo a cada requisição de propósito: assim dá pra editar
 // a whitelist.json e aplicar na hora, sem reiniciar o servidor.
@@ -60,31 +61,46 @@ function autoAutorizarIp(ip, sessao) {
   }
 }
 
-// Varredura periódica (server.js: boot + intervalo): remove do
-// whitelist.json as entradas automáticas vencidas. Elas já NÃO davam
-// acesso (toda checagem exige expiraEm > agora), mas ficavam gravadas no
-// arquivo — par IP+usuário de sessões mortas — até o próximo evento de
-// auto-autorização, que podia nunca acontecer. Cookie morto => rastro
-// some do arquivo na varredura seguinte.
-function podarAutoIpsExpirados() {
-  let dados;
-  try {
-    dados = loadWhitelist();
-  } catch {
-    return;
+// A lista automática de IPs entra na varredura global de limpeza (lib/stores.js)
+// como um Store registrado — assim o server.js não precisa listar a poda dela
+// à mão. NÃO é um FileStore: a whitelist.json é dividida com a lista MANUAL
+// (allowedIps) e a leitura é fail-closed de propósito (loadWhitelist LANÇA se o
+// arquivo some/quebra, pra NEGAR acesso em vez de abrir com lista vazia). Por
+// isso a poda usa o loader próprio, com try/catch fail-closed, e não a I/O
+// genérica do FileStore.
+class AutoIpStore extends Store {
+  constructor() {
+    super('whitelist');
   }
-  const agora = Date.now();
-  const vivas = dados.autoAllowedIps.filter((entrada) => entrada.expiraEm > agora);
-  if (vivas.length === dados.autoAllowedIps.length) return;
 
-  dados.autoAllowedIps = vivas;
-  try {
-    salvarWhitelist(dados);
-    logManager.info('whitelist', 'entradas expiradas removidas de config/whitelist.json');
-  } catch (err) {
-    logManager.registrarErro('whitelist', `falha ao podar expirados: ${err.message}`);
+  // server.js: boot + intervalo (via Store.podarTodas). Remove do whitelist.json
+  // as entradas automáticas vencidas. Elas já NÃO davam acesso (toda checagem
+  // exige expiraEm > agora), mas ficavam gravadas no arquivo — par IP+usuário
+  // de sessões mortas — até o próximo evento de auto-autorização, que podia
+  // nunca acontecer. Cookie morto => rastro some na varredura seguinte.
+  podarEPersistir() {
+    let dados;
+    try {
+      dados = loadWhitelist();
+    } catch {
+      return; // fail-closed: arquivo ausente/inválido — não mexe.
+    }
+    const agora = Date.now();
+    const vivas = dados.autoAllowedIps.filter((entrada) => entrada.expiraEm > agora);
+    if (vivas.length === dados.autoAllowedIps.length) return;
+
+    dados.autoAllowedIps = vivas;
+    try {
+      salvarWhitelist(dados);
+      logManager.info('whitelist', 'entradas expiradas removidas de config/whitelist.json');
+    } catch (err) {
+      logManager.registrarErro('whitelist', `falha ao podar expirados: ${err.message}`);
+    }
   }
 }
+
+// O require já registra o store na varredura global (server.js: Store.podarTodas).
+new AutoIpStore();
 
 function normalizarIp(ip) {
   // Remove o prefixo IPv4-mapped-IPv6 (::ffff:) que o Node adiciona às vezes.
@@ -181,4 +197,3 @@ module.exports = checarWhitelist;
 // mesmo IP que a whitelist — mesma lógica de proxy confiável — pra vincular
 // o token ao IP sem divergência entre as duas camadas.
 module.exports.getClientIp = getClientIp;
-module.exports.podarAutoIpsExpirados = podarAutoIpsExpirados;

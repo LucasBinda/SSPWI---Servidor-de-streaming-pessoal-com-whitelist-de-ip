@@ -9,8 +9,9 @@ const { handleMoviesApi, handleStream } = require('./routes/movies');
 const { scanMoviesDir, sincronizarCatalogo } = require('./lib/catalog');
 const { handleMediaTracks, handleMediaSubtitle, handleMediaAudio } = require('./routes/media');
 const { handleWatchTimeGet, handleWatchTimeSave, handlePrefsGet, handlePrefsSave } = require('./routes/user');
-const { podarOrfaos, migrar: migrarUsuarios } = require('./lib/userStore');
+const { migrar: migrarUsuarios } = require('./lib/userStore');
 const { prepararWorker, enfileirarNaoMp4 } = require('./lib/reencodeWorker');
+const { Store } = require('./lib/stores');
 const { iniciarAtualizadorDuckdns } = require('./lib/duckdns');
 const { coverPicker } = require('./lib/coverPicker');
 const { serveStatic } = require('./lib/staticServer');
@@ -210,17 +211,16 @@ server.listen(PORT, () => {
   // local que não existe mais em disco.
   coverPicker.garantirCapas(sincronizarCatalogo(arquivos));
 
-  // Higiene de dados atrelados a cookies mortos, INDEPENDENTE de tráfego:
-  // minutagem de logins expirados (data/watchtime.json) e entradas
-  // automáticas vencidas da whitelist. Roda no boot e a cada 6h — garante
-  // que cookie deletado/expirado leva os dados dele junto mesmo que
-  // ninguém mais use o servidor pra disparar as podas de gravação.
-  const limparDadosDeSessoesMortas = () => {
-    podarOrfaos();
-    checarWhitelist.podarAutoIpsExpirados();
-  };
-  limparDadosDeSessoesMortas();
-  setInterval(limparDadosDeSessoesMortas, 6 * 60 * 60 * 1000).unref();
+  // Higiene de TODO dado que pode virar lixo, INDEPENDENTE de tráfego: uma
+  // varredura só (Store.podarTodas, lib/stores.js) percorre todos os stores
+  // registrados — usuários (logins expirados), IPs automáticos da whitelist,
+  // estado do re-encode (jobs de arquivos que sumiram) e catálogo (filmes
+  // removidos do disco). Cada store se auto-registra ao ser carregado, então
+  // acrescentar um store novo NÃO exige tocar aqui: basta estendê-lo de Store.
+  // Roda no boot e a cada 6h — cookie/arquivo morto leva os dados dele junto
+  // mesmo que ninguém use o servidor pra disparar as podas de gravação.
+  Store.podarTodas();
+  setInterval(() => Store.podarTodas(), 6 * 60 * 60 * 1000).unref();
 
   // DNS dinâmico: com domínio+token do DuckDNS no config/settings.json, o
   // servidor mantém o domínio apontando pro IP da casa — pré-requisito do
