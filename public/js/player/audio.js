@@ -44,23 +44,31 @@ export function preencherFaixas(tracks, video, arquivo) {
   });
 }
 
-// Grafo de áudio COMPARTILHADO (equalizador + troca de faixa).
-// createMediaElementSource só pode ser chamado UMA vez por elemento — a
-// partir daí todo o áudio do <video> sai pelo grafo, então quem precisa
-// mexer no som passa por aqui. A "torneira" é um nó de ganho logo depois
-// da fonte: a troca de faixa fecha ela (gain 0) pra silenciar a faixa
-// embutida SEM tocar em video.muted — assim a barra nativa de volume/mudo
-// continua funcionando normalmente (e é espelhada na faixa externa), em
-// vez de brigar com o usuário re-mutando o vídeo a cada ajuste.
+// Grafo de áudio COMPARTILHADO (reforço de volume + equalizador + troca de
+// faixa). createMediaElementSource só pode ser chamado UMA vez por elemento
+// — a partir daí todo o áudio do <video> sai pelo grafo, então quem precisa
+// mexer no som passa por aqui.
+//
+// Cadeia fixa: source -> torneira -> boost -> (destino | cadeia do EQ).
+// - "torneira": nó de ganho logo depois da fonte, que a troca de faixa fecha
+//   (gain 0) pra silenciar a faixa embutida SEM tocar em video.muted — assim
+//   a barra nativa de volume/mudo continua funcionando (e é espelhada na
+//   faixa externa), em vez de brigar com o usuário re-mutando o vídeo.
+// - "boost": ganho >= 1 que amplifica além do máximo do <video> nativo (o
+//   volume nativo trava em 1.0). É também o nó que a religação do EQ move
+//   entre o destino e a cadeia de processamento — por isso ele fica no fim
+//   da parte fixa do grafo, valendo com ou sem equalizador.
 let grafoAudio = null;
 function obterGrafoDeAudio(video) {
   if (!grafoAudio) {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const source = ctx.createMediaElementSource(video);
     const torneira = ctx.createGain();
+    const boost = ctx.createGain();
     source.connect(torneira);
-    torneira.connect(ctx.destination); // caminho padrão; o EQ religa quando ativo
-    grafoAudio = { ctx, torneira };
+    torneira.connect(boost);
+    boost.connect(ctx.destination); // caminho padrão; o EQ religa a saída do boost quando ativo
+    grafoAudio = { ctx, torneira, boost };
   }
   if (grafoAudio.ctx.state === 'suspended') grafoAudio.ctx.resume();
   return grafoAudio;
@@ -270,19 +278,19 @@ export function configurarEqualizador(video) {
 
   function ligar() {
     montarCadeia();
-    const { torneira } = obterGrafoDeAudio(video);
-    torneira.disconnect();
-    torneira.connect(entradaCadeia);
+    const { boost } = obterGrafoDeAudio(video);
+    boost.disconnect();
+    boost.connect(entradaCadeia);
     painelEq.hidden = false;
   }
 
   function desligar() {
-    // Bypass real: a torneira volta a despejar direto no destino, sem
+    // Bypass real: a saída do boost volta a despejar direto no destino, sem
     // compressor nem filtros. (Cadeia nunca montada = nada a religar.)
     if (entradaCadeia) {
-      const { ctx, torneira } = obterGrafoDeAudio(video);
-      torneira.disconnect();
-      torneira.connect(ctx.destination);
+      const { ctx, boost } = obterGrafoDeAudio(video);
+      boost.disconnect();
+      boost.connect(ctx.destination);
     }
     painelEq.hidden = true;
   }
@@ -304,6 +312,55 @@ export function configurarEqualizador(video) {
     const engatar = () => {
       if (toggleEq.checked && !entradaCadeia) ligar();
     };
+    document.addEventListener('pointerdown', engatar, { once: true });
+    document.addEventListener('keydown', engatar, { once: true });
+  }
+}
+
+// Reforço de volume: amplifica o áudio ALÉM do máximo do <video> nativo (que
+// trava em 100%), pro caso de um filme baixo demais num cliente de som fraco.
+// Atua no nó "boost" do grafo compartilhado; um fator de 1.0 (100%) é neutro.
+// É uma preferência do DISPOSITIVO (localStorage, como o equalizador) — o
+// volume nativo é que segue o usuário (ver prefs.js). Como mexer no áudio
+// exige o AudioContext, que só liga a partir de um gesto, um fator salvo > 1
+// só engata no primeiro clique/tecla (até lá o vídeo toca no caminho nativo,
+// em 100% — inaudível como "falta de reforço", não como silêncio).
+export function configurarReforcoVolume(video) {
+  const slider = document.getElementById('slider-reforco');
+  const valor = document.getElementById('valor-reforco');
+  const CHAVE_STORAGE = 'sspwi-reforco-volume';
+
+  let fator = 100; // porcentagem: 100 = neutro
+  const salvo = Number(localStorage.getItem(CHAVE_STORAGE));
+  if (Number.isFinite(salvo) && salvo >= 100 && salvo <= 300) fator = salvo;
+
+  const refletir = () => {
+    slider.value = String(fator);
+    valor.textContent = `${fator}%`;
+  };
+
+  // Aplica no grafo (montando/retomando o AudioContext). Só deve ser chamado
+  // a partir de um gesto do usuário — quem carrega do storage difere pro
+  // primeiro gesto abaixo, pra não redirecionar o áudio pro grafo suspenso.
+  const aplicar = () => {
+    obterGrafoDeAudio(video).boost.gain.value = fator / 100;
+  };
+
+  refletir();
+
+  slider.addEventListener('input', () => {
+    const v = Number(slider.value);
+    fator = Number.isFinite(v) ? Math.min(300, Math.max(100, v)) : 100;
+    valor.textContent = `${fator}%`;
+    localStorage.setItem(CHAVE_STORAGE, String(fator));
+    // O próprio arraste é um gesto — seguro engatar o grafo e aplicar já.
+    aplicar();
+  });
+
+  // Fator salvo de uma sessão anterior: o slider já mostra o valor, mas o
+  // grafo só pode engatar num gesto (mesma restrição do equalizador).
+  if (fator !== 100) {
+    const engatar = () => aplicar();
     document.addEventListener('pointerdown', engatar, { once: true });
     document.addEventListener('keydown', engatar, { once: true });
   }

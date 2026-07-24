@@ -60,6 +60,17 @@
         </div>
 
         <div class="painel-secao">
+          <div class="linha-reforco">
+            <label for="slider-reforco">Reforço de volume</label>
+            <span id="valor-reforco" class="valor-reforco">100%</span>
+          </div>
+          <input type="range" id="slider-reforco" class="slider-reforco"
+                 min="100" max="300" step="10" value="100"
+                 aria-label="Reforço de volume acima de 100%">
+          <p class="dica-reforco">Amplifica o áudio além do máximo do navegador — use se o filme estiver baixo demais. Valores altos podem distorcer.</p>
+        </div>
+
+        <div class="painel-secao">
           <div class="linha-toggle">
             <label for="toggle-equalizador">Equalizador de áudio</label>
             <input type="checkbox" id="toggle-equalizador" class="switch" role="switch">

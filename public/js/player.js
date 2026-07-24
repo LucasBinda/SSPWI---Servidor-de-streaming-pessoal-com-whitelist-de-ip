@@ -7,7 +7,7 @@ import {
   configurarModosDeTela,
   configurarAjusteDeImagem,
 } from './player/tela.js';
-import { preencherFaixas, configurarEqualizador } from './player/audio.js';
+import { preencherFaixas, configurarEqualizador, configurarReforcoVolume } from './player/audio.js';
 import { configurarWatchTime } from './player/watchtime.js';
 import { configurarStatsNerd } from './player/stats.js';
 import { configurarPrefsUsuario } from './player/prefs.js';
@@ -73,6 +73,7 @@ function iniciarPlayer(arquivo) {
   configurarModosDeTela(video);
   configurarAjusteDeImagem();
   configurarEqualizador(video);
+  configurarReforcoVolume(video);
   configurarWatchTime(arquivo, video);
 
   // Metadados (faixas de áudio/legenda) chegam em paralelo, sem bloquear o
