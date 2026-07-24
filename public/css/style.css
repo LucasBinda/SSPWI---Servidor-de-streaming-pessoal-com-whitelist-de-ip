@@ -113,12 +113,50 @@ main {
   background: var(--border);
 }
 
+.card-capa {
+  position: relative;
+}
+
 .card img {
   width: 100%;
   aspect-ratio: 2 / 3;
   object-fit: cover;
   display: block;
   background: var(--bg);
+}
+
+/* Badge de contagem no canto da capa — marca o card como série/coleção. */
+.card-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  min-width: 22px;
+  padding: 3px 7px;
+  border-radius: 11px;
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid var(--accent-dim);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+  line-height: 1.2;
+  backdrop-filter: blur(2px);
+}
+
+/* Dica visual de "pilha" no card de série: uma borda deslocada atrás da capa,
+   como se houvesse mais cartas empilhadas embaixo. */
+.card-serie .card-capa::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: -5px;
+  height: 6px;
+  border-radius: 0 0 5px 5px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-top: none;
+  z-index: -1;
 }
 
 .card .card-body {
@@ -164,6 +202,178 @@ main {
 
 .back-link:hover {
   color: var(--accent);
+}
+
+/* Página da série (serie.html) */
+.serie-main {
+  max-width: min(1100px, 96vw);
+  margin: 0 auto;
+  padding: 8px 32px 64px;
+}
+
+.serie-cabecalho {
+  display: flex;
+  gap: 20px;
+  align-items: flex-end;
+  padding: 12px 0 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+
+.serie-capa {
+  width: 120px;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.serie-info h1 {
+  margin: 0;
+  font-size: clamp(28px, 3.5vw, 46px);
+  font-weight: 400;
+  color: var(--accent);
+}
+
+.serie-contagem {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.serie-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.serie-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+
+.serie-item:hover,
+.serie-item:focus-visible {
+  transform: translateX(4px);
+  border-color: var(--accent-dim);
+  background: var(--surface-hover);
+}
+
+.serie-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.serie-item-num {
+  flex-shrink: 0;
+  width: 28px;
+  text-align: center;
+  font-size: 15px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.serie-item-capa {
+  flex-shrink: 0;
+  width: 64px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--bg);
+}
+
+.serie-item-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.serie-item-titulo {
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.serie-item-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serie-vazio {
+  color: var(--text-secondary);
+  padding: 24px 4px;
+  list-style: none;
+}
+
+/* Link "voltar à série" no cabeçalho do player e botão "próximo episódio" */
+.player-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.serie-link {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 14px;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serie-link:hover,
+.serie-link:focus-visible {
+  color: var(--accent);
+}
+
+.serie-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0 4px;
+}
+
+.btn-episodio {
+  padding: 9px 16px;
+  background: var(--surface);
+  color: var(--accent);
+  border: 1px solid var(--accent-dim);
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.btn-episodio:hover:not(:disabled),
+.btn-episodio:focus-visible:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+  outline: none;
+}
+
+.btn-episodio:disabled {
+  opacity: 0.35;
+  color: var(--text-secondary);
+  border-color: var(--border);
+  cursor: default;
 }
 
 .player-wrap {

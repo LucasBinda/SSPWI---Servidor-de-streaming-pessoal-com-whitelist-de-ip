@@ -5,7 +5,7 @@ const checarWhitelist = require('./middleware/ipWhitelist');
 const { handleAuthSession, checarSessao } = require('./middleware/sessionCookie');
 const { logManager } = require('./lib/logManager');
 const { loadSettings, validarAntiFilterLog } = require('./lib/settings');
-const { handleMoviesApi, handleStream } = require('./routes/movies');
+const { handleMoviesApi, handleSerieApi, handleStream } = require('./routes/movies');
 const { scanMoviesDir, sincronizarCatalogo } = require('./lib/catalog');
 const { handleMediaTracks, handleMediaSubtitle, handleMediaAudio } = require('./routes/media');
 const { handleWatchTimeGet, handleWatchTimeSave, handlePrefsGet, handlePrefsSave } = require('./routes/user');
@@ -105,6 +105,7 @@ function manejarRequisicao(req, res) {
   // pra conseguir pedir a sessão em /auth/session.
   const rotaProtegida =
     pathname === '/api/movies' ||
+    pathname === '/api/serie' ||
     pathname === '/stream' ||
     pathname.startsWith('/media/') ||
     pathname.startsWith('/covers/');
@@ -118,6 +119,14 @@ function manejarRequisicao(req, res) {
     // IP+chamada no LogManager — mesmo esquema pro filme e legenda abaixo).
     logManager.registrarChamada(clientIp, 'catálogo');
     return handleMoviesApi(req, res);
+  }
+
+  // Página da série: um grupo (série/coleção) com a lista ordenada de
+  // episódios. Alimenta serie.html e a resolução do "próximo episódio" do
+  // player (auto-play).
+  if (pathname === '/api/serie') {
+    const query = Object.fromEntries(parsedUrl.searchParams);
+    return handleSerieApi(req, res, query);
   }
 
   // Streaming de vídeo (com suporte a range requests). searchParams já vem

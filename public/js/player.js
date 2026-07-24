@@ -11,6 +11,7 @@ import { preencherFaixas, configurarEqualizador, configurarReforcoVolume } from 
 import { configurarWatchTime } from './player/watchtime.js';
 import { configurarStatsNerd } from './player/stats.js';
 import { configurarPrefsUsuario } from './player/prefs.js';
+import { configurarSerie } from './player/serie.js';
 
 // Auth vem de js/auth.js (script clássico carregado ANTES deste módulo, que
 // expõe window.Auth) — o cookie de sessão é HttpOnly, então este código só
@@ -75,6 +76,9 @@ function iniciarPlayer(arquivo) {
   configurarEqualizador(video);
   configurarReforcoVolume(video);
   configurarWatchTime(arquivo, video);
+  // Consciência de série (próximo episódio / auto-play) quando ?grupo=... vem
+  // na URL — presente só quando o player foi aberto pela página da série.
+  configurarSerie({ video, arquivo });
 
   // Metadados (faixas de áudio/legenda) chegam em paralelo, sem bloquear o
   // início da reprodução acima.

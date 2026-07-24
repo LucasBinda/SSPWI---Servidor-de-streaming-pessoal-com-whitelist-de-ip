@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Série — Sala de projeção</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="player-header">
+    <a class="back-link" href="/">&larr; Voltar ao catálogo</a>
+  </div>
+
+  <main class="serie-main">
+    <div class="serie-cabecalho">
+      <img id="serie-capa" class="serie-capa" alt="">
+      <div class="serie-info">
+        <h1 class="marquee-font" id="serie-titulo"></h1>
+        <p id="serie-contagem" class="serie-contagem"></p>
+      </div>
+    </div>
+
+    <ol id="serie-lista" class="serie-lista" aria-label="Episódios da série"></ol>
+  </main>
+
+  <script src="/js/auth.js"></script>
+  <script type="module" src="/js/serie.js"></script>
+</body>
+</html>
