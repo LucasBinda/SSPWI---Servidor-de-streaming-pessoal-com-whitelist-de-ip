@@ -325,14 +325,21 @@ export function configurarEqualizador(video) {
 // exige o AudioContext, que só liga a partir de um gesto, um fator salvo > 1
 // só engata no primeiro clique/tecla (até lá o vídeo toca no caminho nativo,
 // em 100% — inaudível como "falta de reforço", não como silêncio).
+// Teto do reforço, em %. Ponto único de verdade: valida o valor salvo,
+// limita o arraste e define o max do slider. Mudar aqui muda tudo (o
+// max="..." no HTML é só o valor pré-JS, sobrescrito abaixo). 100 = neutro.
+const REFORCO_MAX = 500;
+
 export function configurarReforcoVolume(video) {
   const slider = document.getElementById('slider-reforco');
   const valor = document.getElementById('valor-reforco');
   const CHAVE_STORAGE = 'sspwi-reforco-volume';
 
+  slider.max = String(REFORCO_MAX);
+
   let fator = 100; // porcentagem: 100 = neutro
   const salvo = Number(localStorage.getItem(CHAVE_STORAGE));
-  if (Number.isFinite(salvo) && salvo >= 100 && salvo <= 300) fator = salvo;
+  if (Number.isFinite(salvo) && salvo >= 100 && salvo <= REFORCO_MAX) fator = salvo;
 
   const refletir = () => {
     slider.value = String(fator);
@@ -350,7 +357,7 @@ export function configurarReforcoVolume(video) {
 
   slider.addEventListener('input', () => {
     const v = Number(slider.value);
-    fator = Number.isFinite(v) ? Math.min(300, Math.max(100, v)) : 100;
+    fator = Number.isFinite(v) ? Math.min(REFORCO_MAX, Math.max(100, v)) : 100;
     valor.textContent = `${fator}%`;
     localStorage.setItem(CHAVE_STORAGE, String(fator));
     // O próprio arraste é um gesto — seguro engatar o grafo e aplicar já.
