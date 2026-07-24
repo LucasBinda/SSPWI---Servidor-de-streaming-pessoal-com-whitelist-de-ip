@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { enfileirarNaoMp4 } = require('../lib/reencodeWorker');
+const { enfileirarConversoes } = require('../lib/reencodeWorker');
 const { coverPicker } = require('../lib/coverPicker');
 const { servirArquivoComRange } = require('../lib/httpRange');
 const { MOVIES_DIR } = require('../lib/paths');
@@ -24,10 +24,12 @@ function handleMoviesApi(req, res) {
     const arquivos = scanMoviesDir(MOVIES_DIR);
     const listaSincronizada = sincronizarCatalogo(arquivos);
 
-    // Fase 2: qualquer vídeo novo que não seja .mp4 entra na fila de
-    // conversão em background (barato e idempotente — o worker ignora o
-    // que já está na fila, concluído ou com falha registrada).
-    enfileirarNaoMp4(arquivos);
+    // Fase 2: todo vídeo entra na fila de avaliação em background — o worker
+    // sonda as faixas e converte pra H.264/AAC estéreo o que não toca no
+    // navegador (inclusive HEVC dentro de .mp4), deixando o resto intocado.
+    // Barato e idempotente: o worker ignora o que já está na fila, concluído
+    // ou com falha registrada.
+    enfileirarConversoes(arquivos);
 
     // Fase 4: gera capa (frame aleatório do próprio filme) pra toda entrada
     // sem capa ou com capa local que não existe mais em disco.

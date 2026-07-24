@@ -10,7 +10,7 @@ const { scanMoviesDir, sincronizarCatalogo } = require('./lib/catalog');
 const { handleMediaTracks, handleMediaSubtitle, handleMediaAudio } = require('./routes/media');
 const { handleWatchTimeGet, handleWatchTimeSave, handlePrefsGet, handlePrefsSave } = require('./routes/user');
 const { migrar: migrarUsuarios } = require('./lib/userStore');
-const { prepararWorker, enfileirarNaoMp4 } = require('./lib/reencodeWorker');
+const { prepararWorker, enfileirarConversoes } = require('./lib/reencodeWorker');
 const { Store } = require('./lib/stores');
 const { iniciarAtualizadorDuckdns } = require('./lib/duckdns');
 const { coverPicker } = require('./lib/coverPicker');
@@ -198,13 +198,14 @@ server.listen(PORT, () => {
   // antes de servir; não faz nada se users.json já existe.
   migrarUsuarios();
 
-  // limpa temporários de conversões interrompidas e enfileira
-  // qualquer não-mp4 já presente no acervo (vídeos adicionados enquanto o
-  // servidor estava desligado). Novos arquivos detectados em runtime são
-  // enfileirados pelo /api/movies (routes/movies.js).
+  // limpa temporários de conversões interrompidas e enfileira todo o acervo
+  // pra avaliação de compatibilidade (vídeos adicionados enquanto o servidor
+  // estava desligado). O worker só converte o que não toca no navegador; o
+  // resto é marcado como já-compatível. Novos arquivos detectados em runtime
+  // são enfileirados pelo /api/movies (routes/movies.js).
   prepararWorker();
   const arquivos = scanMoviesDir(MOVIES_DIR);
-  enfileirarNaoMp4(arquivos);
+  enfileirarConversoes(arquivos);
 
   // sincroniza o catálogo já no boot (sem esperar a primeira
   // visita) e gera capa pra quem não tem — ou pra quem referencia uma capa

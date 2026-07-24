@@ -8,10 +8,11 @@ o catálogo é um JSON e a autorização é por IP + cookie de sessão assinado.
 Além do catálogo e do streaming, o servidor cuida sozinho de três coisas em
 segundo plano:
 
-- **Padronização do acervo**: vídeo adicionado em formato diferente de
-  `.mp4` (MKV, AVI...) é convertido automaticamente pra `.mp4` por um
-  worker de baixa prioridade, substituindo o original (veja
-  `docs/fase2-worker-reencode.md`).
+- **Padronização do acervo**: vídeo que não toque em navegador puro (MKV,
+  AVI, HEVC/H.265, H.264 10-bit, áudio AC3/DTS/5.1...) é convertido
+  automaticamente pra `.mp4` H.264 8-bit + AAC estéreo por um worker de
+  baixa prioridade, substituindo o original (veja
+  `docs/worker-reencode.md`).
 - **Capas automáticas**: filme sem capa ganha uma — um frame aleatório do
   próprio vídeo, extraído entre 20% e 80% da duração.
 - **Login persistente**: além da whitelist de IP, as rotas de conteúdo
@@ -78,14 +79,17 @@ media/movies/
     └── outro-filme.avi        <- idem
 ```
 
-Como funciona a padronização: qualquer arquivo que não seja `.mp4` entra na
-fila do **worker de conversão**, que roda em background com prioridade
-mínima de CPU (`nice -19`, sem disputar com quem está assistindo) e
-substitui o original **só depois** de verificar que a conversão deu certo.
-Fontes já em HEVC/AV1 são só remuxadas (segundos, sem perda de qualidade);
-codecs antigos são re-encodados pra H.265, poupando espaço em disco. O
-progresso fica em `data/reencode-state.json` e no log do servidor; detalhes
-e configuração em `docs/fase2-worker-reencode.md`.
+Como funciona a padronização: todo vídeo entra na fila do **worker de
+conversão**, que sonda as faixas e converte pra o único formato que toca em
+qualquer navegador — `.mp4` com vídeo **H.264 8-bit** e áudio **AAC
+estéreo**. Roda em background com prioridade mínima de CPU (`nice -19`, sem
+disputar com quem está assistindo) e substitui o original **só depois** de
+verificar que a conversão deu certo. Vídeo que já é H.264 8-bit é só
+remuxado (segundos, sem perda); HEVC/H.265, AV1, VP9, H.264 10-bit e áudio
+AC3/DTS/5.1 são re-encodados (é o que faz um filme HEVC parar de "só rodar
+no host" e passar a tocar nos clientes). O que já está compatível é deixado
+intocado. O progresso fica em `data/reencode-state.json` e no log; detalhes
+e configuração em `docs/worker-reencode.md`.
 
 Enquanto a conversão não termina, o arquivo original ainda aparece no
 catálogo — se o navegador do PC remoto não tocar aquele formato, o player
@@ -189,12 +193,13 @@ comportamento você mesmo.
 
 Também em `config/settings.json` (padrões entre parênteses):
 `reencodeAtivo` (`true`) liga/desliga o worker; `reencodeCodec`
-(`"libx265"`), `reencodePreset` (`"fast"`) e `reencodeCrf` (`26`) controlam
-o re-encode quando ele é necessário de verdade — fontes já em HEVC/AV1 são
-só remuxadas, sem re-encodar. Se algum aparelho da casa não decodificar
-HEVC (Chrome/Edge dependem de suporte por hardware; Firefox é limitado),
-troque `reencodeCodec` pra `"libx264"`. Tabela completa em
-`docs/fase2-worker-reencode.md`.
+(`"libx264"`), `reencodePreset` (`"faster"`) e `reencodeCrf` (`23`)
+controlam o re-encode quando ele é necessário de verdade — vídeo que já é
+H.264 8-bit é só remuxado, sem re-encodar. **Deixe `reencodeCodec` em
+`"libx264"`**: é o que garante que os filmes toquem em qualquer navegador.
+Trocar pra `"libx265"`/`"libsvtav1"` economiza disco mas reintroduz o
+problema de HEVC/AV1 não tocarem nos clientes. Tabela completa em
+`docs/worker-reencode.md`.
 
 ## Configurando a whitelist de IP
 
@@ -355,7 +360,4 @@ streaming-server/
 ```
 
 Este projeto não depende de nenhum pacote de terceiros — só do próprio
-Node.js. Veja `docs/implementacao-sem-dependencias.md` para o
-detalhamento de como o roteamento manual substitui o que o `express`
-fazia, e `docs/testes-de-seguranca.md` para reproduzir cada vulnerabilidade
-já corrigida e confirmar você mesmo que a correção funciona.
+Node.js.
