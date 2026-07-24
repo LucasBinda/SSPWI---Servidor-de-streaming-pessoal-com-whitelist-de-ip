@@ -33,7 +33,9 @@ header.site-header {
 
 header.site-header h1 {
   margin: 0;
-  font-size: 44px;
+  /* clamp: cresce com a tela (até 68px num display grande), sem encolher
+     abaixo de 44px no desktop comum nem estourar no celular. */
+  font-size: clamp(44px, 4vw, 68px);
   font-weight: 400;
   color: var(--accent);
 }
@@ -60,14 +62,21 @@ header.site-header p {
 }
 
 main {
-  max-width: 1100px;
+  /* Largura baseada em viewport: o catálogo ACOMPANHA a tela de forma
+     contínua (96vw = usa quase toda a largura, com uma folga de 2% de cada
+     lado). O teto de 3000px só entra em telas gigantes (5K/ultrawide), pra
+     o conteúdo não esticar sem limite. 96vw (e não 100vw) evita a barra de
+     rolagem provocar overflow horizontal. */
+  max-width: min(3000px, 96vw);
   margin: 0 auto;
   padding: 0 32px 64px;
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  /* minmax fluido: os cards crescem um pouco com a tela (até 300px) em vez
+     de só multiplicar colunas minúsculas num display enorme. */
+  grid-template-columns: repeat(auto-fill, minmax(clamp(200px, 15vw, 300px), 1fr));
   gap: 28px;
 }
 
@@ -142,7 +151,7 @@ main {
 
 /* Página do player */
 .player-header {
-  max-width: 900px;
+  max-width: min(2200px, 96vw);
   margin: 0 auto;
   padding: 24px 32px 0;
 }
@@ -158,13 +167,23 @@ main {
 }
 
 .player-wrap {
-  max-width: 900px;
+  /* Mesma lógica do catálogo: acompanha a viewport (96vw) até um teto alto.
+     A altura do vídeo é limitada pelo max-height mais abaixo, então em telas
+     largas o vídeo fica tão grande quanto a ALTURA disponível permite. */
+  max-width: min(2200px, 96vw);
   margin: 20px auto 64px;
   padding: 0 32px;
 }
 
 .player-wrap video {
   width: 100%;
+  /* Guarda de altura: agora que o vídeo pode chegar a 1600px de largura
+     (~900px de altura), num monitor mais baixo/largo isso empurraria os
+     controles e o título pra fora da tela. O max-height segura o vídeo
+     dentro da viewport; object-fit:contain mantém a proporção (barras
+     laterais no pior caso, sem cortar nem deformar a imagem). */
+  max-height: calc(100vh - 140px);
+  object-fit: contain;
   border-radius: 6px;
   background: #000;
   display: block;
